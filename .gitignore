@@ -1,0 +1,31 @@
+# ===== Secrets / API keys (ห้าม commit) =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+secrets.json
+credentials.json
+service-account*.json
+
+# ===== Dependencies =====
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# ===== Build output =====
+dist/
+build/
+*.log
+
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
