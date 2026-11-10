@@ -101,3 +101,66 @@ if __name__ == '__main__':
                              ปีคี่=round(D[D.year % 2 == 1].R.mean(), 3), ปีคู่=round(D[D.year % 2 == 0].R.mean(), 3),
                              ในKZ=s_(D[kz]), นอกKZ=s_(D[~kz])))
     pd.set_option('display.width', 250); print(pd.DataFrame(rows).to_string(index=False))
+
+
+from sim import candle
+
+
+@nb.njit(cache=True)
+def study_pa(t, o, h, l, c, atr, s, disp, maxAge, spread, Pc, paWin, slMode):
+    """First touch of a fresh OB, then wait up to paWin bars for a PA candle that wicks into the OB and closes back
+    outside it (not through). Enter at the next bar's open. slMode 0: beyond the OB, 1: beyond the PA candle wick."""
+    n = len(c)
+    out = np.zeros((200000, 7)); k = 0
+    lastSH = 0.0; lastSL = 0.0
+    for i in range(2 * s + 2, n - 2):
+        if swing_hi(h, i - s, s, i): lastSH = h[i - s]
+        if swing_lo(l, i - s, s, i): lastSL = l[i - s]
+        a = atr[i]
+        if a <= 0: continue
+        for d in (1, -1):
+            if d * (c[i] - o[i]) < disp * a: continue
+            if d > 0 and not (lastSH > 0 and c[i] > lastSH and o[i] <= lastSH): continue
+            if d < 0 and not (lastSL > 0 and c[i] < lastSL and o[i] >= lastSL): continue
+            j = -1
+            for q in range(i - 1, max(i - 6, 0), -1):
+                if d * (c[q] - o[q]) < 0: j = q; break
+            if j < 0: continue
+            zT = h[j]; zB = l[j]
+            ok = True
+            for q in range(j + 2, i + 1):
+                if (d > 0 and l[q] <= zT) or (d < 0 and h[q] >= zB): ok = False; break
+            if not ok: continue
+            q0 = -1
+            for q in range(i + 1, min(i + 1 + maxAge, n - 2)):
+                if (d > 0 and l[q] <= zT) or (d < 0 and h[q] >= zB): q0 = q; break
+            if q0 < 0: continue
+            # wait for PA confirmation at the OB
+            u0 = -1
+            for u in range(q0, min(q0 + paWin, n - 2)):
+                if (d > 0 and c[u] < zB) or (d < 0 and c[u] > zT): break          # closed through: zone failed
+                inz = (l[u] <= zT) if d > 0 else (h[u] >= zB)
+                if inz and candle(o, h, l, c, u, d, Pc): u0 = u; break
+            if u0 < 0: continue
+            entry = o[u0 + 1] + (spread if d > 0 else 0.0)
+            if slMode == 0: sl = zB - 0.1 * a if d > 0 else zT + 0.1 * a + spread
+            else: sl = l[u0] - 0.1 * a if d > 0 else h[u0] + 0.1 * a + spread
+            risk = d * (entry - sl)
+            if risk <= 0: continue
+            tp = 0.0
+            for r in range(u0 - s, max(u0 - 400, s), -1):
+                if d > 0 and swing_hi(h, r, s, u0) and h[r] > entry + 0.1 * a: tp = h[r]; break
+                if d < 0 and swing_lo(l, r, s, u0) and l[r] + spread < entry - 0.1 * a: tp = l[r] + spread; break
+            if tp == 0.0: continue
+            res = 0.0; got = -1
+            for v in range(u0 + 1, min(u0 + 2000, n)):
+                hs = (l[v] <= sl) if d > 0 else (h[v] + spread >= sl)
+                ht = (h[v] >= tp) if d > 0 else (l[v] + spread <= tp)
+                if v == u0 + 1: ht = False                                         # no TP on the fill bar
+                if hs: res = -1.0; got = 0; break
+                if ht: res = d * (tp - entry) / risk; got = 1; break
+            if got >= 0 and k < 200000:
+                out[k, 0] = t[u0 + 1]; out[k, 1] = d; out[k, 2] = res; out[k, 3] = got; out[k, 4] = risk
+                out[k, 5] = d * (tp - entry) / risk; out[k, 6] = ((t[u0 + 1] - 420) % 1440) / 60.0
+                k += 1
+    return out[:k]
