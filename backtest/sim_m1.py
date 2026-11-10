@@ -7,7 +7,7 @@ from sim import swing_hi, swing_lo, candle, htf_trend
 
 @nb.njit(cache=True)
 def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
-           H1h, H1l, H4h, H4l, b1, b4, cfg, Pc):
+           H1h, H1l, H4h, H4l, b1, b4, cfg, Pc, aH1, aH4):
     # cfg: 0 risk%,1 RR,2 slBufATR1,3 maxDepthATR5,4 maxTrades/day,5 BE_R,6 BEplus,7 partial%,8 setupExp(M1 bars),
     # 9 mssS,10 dispATR1,11 minFVGATR1,12 fvgWait,13 paWait,14 entryMode(0 FVG+PA, 1 market at MSS),
     # 15 spread,16 startBal,17 biasMode(0 none,1 H1,2 H4,3 both),18 lon,19 ny,20 useH1,21 useH4,22 usePD,
@@ -212,10 +212,20 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             if cfg[4] > 0 and dayTrades >= cfg[4]: continue
             entry = o[t + 1] + (spread if d > 0 else 0.0)
             sl = sExt[sd] - d * cfg[2] * a1
+            if cfg[26] == 1:
+                az = aH1[t] if sTF[sd] == 1 else aH4[t]
+                sl2 = sL[sd] - d * cfg[27] * az          # beyond the HTF zone
+                if d * (sl - sl2) > 0: sl = sl2
             risk = d * (entry - sl)
             if risk <= 0: sA[sd] = 0; continue
-            if risk > cfg[24] * a5: sA[sd] = 0; continue
-            if spread / risk > cfg[23]: sA[sd] = 0; continue
+            if cfg[29] > 0:
+                # filters judged on the M1-structure SL (selects the same setups), SL actually placed beyond the zone
+                r1 = d * (entry - (sExt[sd] - d * cfg[2] * a1))
+                if r1 <= 0 or r1 > cfg[24] * a5 or spread / r1 > cfg[23]: sA[sd] = 0; continue
+            elif cfg[26] == 1:
+                if risk > cfg[28] * (aH1[t] if sTF[sd] == 1 else aH4[t]): sA[sd] = 0; continue
+            elif risk > cfg[24] * a5: sA[sd] = 0; continue
+            if cfg[29] == 0 and spread / risk > cfg[23]: sA[sd] = 0; continue
             lots = np.floor(bal * cfg[0] / 100.0 / (risk * contract) / 0.01 + 1e-9) * 0.01
             if lots < 0.01: sA[sd] = 0; continue
             st = 2; od = d; oE = entry; oSL = sl; oTP = entry + d * cfg[1] * risk; oLots = lots; oLots0 = lots
