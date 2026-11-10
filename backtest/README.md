@@ -24,3 +24,14 @@ python3 run.py                  # ผลค่าเริ่มต้น + trad
 | 348 | 42.5 | -0.135 | 0.74 | -37.9% | -43.5% |
 
 ![equity](equity.png)
+
+## EA แพ้ตรงไหน (`errors/`)
+`python3 ana.py` (สร้าง trades_full.pkl) แล้ว `python3 plots.py errors` (ต้องมีฟอนต์ Sarabun ใน `backtest/fonts/` หรือตั้ง `THAI_FONT_DIR`)
+
+| ภาพ | เนื้อหา |
+|---|---|
+| `0_summary.png` | สรุป 5 จุดผิดพลาด พร้อมตัวเลข |
+| `1_fake_sweep_breakout.png` | "Sweep" ที่จริงคือเบรคทะลุ + สวนเทรนด์ H4 |
+| `2_instant_fill.png` | ราคาพุ่งทะลุ FVG ทันทีที่ตั้ง Limit |
+| `3_slow_mss.png` | MSS เกิดช้าหลัง sweep หลายแท่ง |
+| `4_stop_hunt.png` | เคสส่วนน้อย: โดนกวาด SL แล้วกลับไป TP |

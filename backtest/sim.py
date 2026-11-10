@@ -105,15 +105,19 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
     L_t = np.zeros(MAXT, np.int64); L_x = np.zeros(MAXT, np.int64); L_d = np.zeros(MAXT, np.int64)
     L_lv = np.zeros(MAXT, np.int64); L_R = np.zeros(MAXT); L_pnl = np.zeros(MAXT); L_kz = np.zeros(MAXT, np.int64)
     L_mkt = np.zeros(MAXT, np.int64)
+    LI = np.zeros((MAXT, 4), np.int64)   # sweepIdx, mssIdx, placeIdx, reason(0 SL,1 TP,2 SL after BE)
+    LF = np.zeros((MAXT, 9))             # entry, sl0, tp, fvgTop, fvgBot, extreme, levelPx, mssPx, exitPx
     nt = 0
     eq_t = np.zeros(n, np.int64); eq_v = np.zeros(n); ne = 0
     # setups [0]=buy [1]=sell
     sAct = np.zeros(2, np.int64); sLvl = np.zeros(2); sLt = np.zeros(2, np.int64); sExt = np.zeros(2)
     sMss = np.zeros(2); sMssDone = np.zeros(2, np.int64); sCand = np.zeros(2, np.int64)
     sIdx = np.zeros(2, np.int64); sAge = np.zeros(2, np.int64); sMAge = np.zeros(2, np.int64); sLeg = np.zeros(2)
+    sMI = np.zeros(2, np.int64)
     # order state: 0 none, 1 pending, 2 position
     st = 0; od = 0; oEntry = 0.0; oSL = 0.0; oTP = 0.0; oLots = 0.0; oLots0 = 0.0; oSet = 0; oRisk = 0.0
     oPnl = 0.0; oBE = False; oLvl = 0; oKZ = 0; oFillT = 0; oMkt = 0
+    oSw = 0; oMI = 0; oPl = 0; oRsn = 0; oE0 = 0.0; oSL0 = 0.0; oTop = 0.0; oBot = 0.0; oExt = 0.0; oLp = 0.0; oMp = 0.0; oX = 0.0
     curDay = -1; dayTrades = 0; dayPL = 0.0
     swS = int(cfg[12]); look = int(cfg[13]); mssS = int(cfg[15])
 
@@ -137,6 +141,7 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                     hitSL = (bl <= oSL) if od > 0 else (bh + spread >= oSL)
                     if hitSL:
                         px = oSL
+                        oX = px; oRsn = 0
                         pnl = od * (px - oEntry) * contract * oLots - cfg[27] * oLots / 2.0
                         bal += pnl; oPnl += pnl; dayPL += pnl
                         st = 3
@@ -151,6 +156,8 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                         slpx = max(bo + spread, oSL) if bo + spread > oSL else oSL
                     if hitSL or hitTP:
                         px = slpx if hitSL else oTP
+                        oX = px
+                        oRsn = (2 if oBE else 0) if hitSL else 1
                         pnl = od * (px - oEntry) * contract * oLots - cfg[27] * oLots / 2.0
                         bal += pnl; oPnl += pnl
                         dday = tm // 1440
@@ -177,6 +184,9 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                 if st == 3:
                     L_t[nt] = oFillT; L_x[nt] = tm; L_d[nt] = od; L_lv[nt] = oLvl; L_kz[nt] = oKZ
                     L_pnl[nt] = oPnl; L_R[nt] = oPnl / (oRisk * contract * oLots0); L_mkt[nt] = oMkt
+                    LI[nt, 0] = oSw; LI[nt, 1] = oMI; LI[nt, 2] = oPl; LI[nt, 3] = oRsn
+                    LF[nt, 0] = oE0; LF[nt, 1] = oSL0; LF[nt, 2] = oTP; LF[nt, 3] = oTop; LF[nt, 4] = oBot
+                    LF[nt, 5] = oExt; LF[nt, 6] = oLp; LF[nt, 7] = oMp; LF[nt, 8] = oX
                     nt += 1
                     eq_t[ne] = tm; eq_v[ne] = bal; ne += 1
                     st = 0
@@ -242,7 +252,7 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                         if broke and disp:
                             if cfg[21] > 0 and sCand[si] == 0:
                                 sAct[si] = 0; break
-                            sMssDone[si] = 1; sMAge[si] = 0
+                            sMssDone[si] = 1; sMAge[si] = 0; sMI[si] = t
                     else:
                         sMAge[si] += 1
                         if (d > 0 and l[t] < sExt[si]) or (d < 0 and h[t] > sExt[si]):
@@ -322,6 +332,7 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                         if not isM and d * (mkt - entry) <= 0: break
                         od = d; oEntry = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots; oSet = now
                         oRisk = risk; oPnl = 0.0; oBE = False; oLvl = sLt[si]; oKZ = kz; oMkt = 1 if isM else 0
+                        oSw = sIdx[si]; oMI = sMI[si]; oPl = t + 1; oE0 = entry; oSL0 = sl; oTop = top; oBot = bot; oExt = sExt[si]; oLp = sLvl[si]; oMp = sMss[si]
                         if isM:
                             st = 2; oFillT = now
                             dayTrades += 1
@@ -407,4 +418,4 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
             sCand[si] = 1 if candle(o, h, l, c, t, d, Pc) else 0
 
     return (L_t[:nt], L_x[:nt], L_d[:nt], L_lv[:nt], L_R[:nt], L_pnl[:nt], L_kz[:nt], L_mkt[:nt],
-            eq_t[:ne], eq_v[:ne], bal)
+            eq_t[:ne], eq_v[:ne], bal, LI[:nt], LF[:nt])

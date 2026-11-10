@@ -1,8 +1,7 @@
 import sys, json, numpy as np, pandas as pd
 from sim import run, htf_trend
 
-import os
-D = os.path.dirname(os.path.abspath(__file__))
+D = '/tmp/claude-0/-home-user-Eash/eaab86b6-dc63-5781-a5d1-6339b6268634/scratchpad/bt'
 z = np.load(D + '/data.npz')
 t5, o, h, l, c, s5, e5 = (z['m5' + k] for k in ('t', 'o', 'h', 'l', 'c', 's', 'e'))
 n = len(t5)
@@ -56,6 +55,8 @@ def go(**kw):
     r = run(z['m1t'], z['m1o'], z['m1h'], z['m1l'], t5, o, h, l, c, s5, e5, atr, bias, dayFirst, pdh, pdl,
             asHi, asLo, asLast, asD0, cfg, Pc)
     T = pd.DataFrame(dict(tin=r[0], tout=r[1], dir=r[2], lvl=r[3], R=r[4], pnl=r[5], kz=r[6], mkt=r[7]))
+    for k,nm in enumerate(['sw','mi','pl','rsn']): T[nm]=r[11][:,k]
+    for k,nm in enumerate(['entry','sl0','tp','top','bot','ext','lvlpx','msspx','xpx']): T[nm]=r[12][:,k]
     T['date'] = pd.to_datetime(T.tin * 60, unit='s')
     return T, r[8], r[9], r[10]
 
