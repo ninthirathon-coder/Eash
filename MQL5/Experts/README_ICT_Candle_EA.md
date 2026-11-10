@@ -10,6 +10,7 @@ EA ที่เทรดตามแนวคิด **ICT (Inner Circle Trader)*
 |---|---|---|
 | 1 | **HTF Bias** | ไล่โครงสร้างตลาดบน TF ใหญ่ (ค่าเริ่มต้น H1) ถ้าปิดทะลุ swing high ล่าสุด = ขาขึ้น, ทะลุ swing low = ขาลง (BOS/CHoCH) และเทรดตามทางนั้นเท่านั้น |
 | 2 | **Liquidity** | ทำเครื่องหมายระดับ liquidity: Previous Day High/Low, Asian session High/Low และ Swing High/Low บน TF เล็ก ที่ราคายังไม่เคยแตะ |
+| 3a | **Multi-TF Sweep** (ค่าเริ่มต้น) | swing ของ TF เล็กนับเป็น sweep ก็ต่อเมื่อ**แท่ง TF ใหญ่ขึ้น 1 ขั้นปิดกลับ**: swing M5 ยืนยันด้วย M15, swing M15 ยืนยันด้วย H1, swing H1 ยืนยันด้วย H4 ถ้าแท่ง TF ใหญ่ปิดทะลุ = TF เล็กเบรคจริง ระดับนั้นถูกทิ้ง แล้ว EA ไปดู swing ของ TF ใหญ่ขึ้นแทน (`InpMTFSweep`, `InpMTF1-3`) |
 | 3 | **Liquidity Sweep** | แท่งเทียนแทงไส้ทะลุระดับนั้นแล้ว **ปิดกลับเข้ามา** (stop hunt / turtle soup) |
 | 4 | **แท่งเทียนยืนยัน (PA ที่ sweep)** | ต้องเจอ Pin bar (Hammer/Shooting star), Engulfing หรือ Morning/Evening star บนแท่ง sweep หรือภายใน 2 แท่งถัดไป (`InpSweepPABars`) |
 | 5 | **MSS + Displacement** | ราคาปิดทะลุ swing ฝั่งตรงข้าม ด้วยแท่งที่มีเนื้อใหญ่ ≥ 1×ATR |
@@ -66,3 +67,7 @@ EA ที่เทรดตามแนวคิด **ICT (Inner Circle Trader)*
 | **รอ PA ทั้งที่ sweep และที่ FVG (ค่าเริ่มต้นใหม่)** | 135 | 42.2 | **-0.073R** | -11% | -19% |
 
 ขาดทุนต่อไม้ลดลงครึ่งหนึ่ง แต่**ยังไม่ทำกำไร** อย่าใช้กับเงินจริง
+| **+ Multi-TF sweep (ค่าเริ่มต้นใหม่)** | 171 | 49.1 | **+0.037R** | +5% | -16% |
+
+Multi-TF ทำให้ผลขึ้นมาราวเท่าทุน แต่ยังไม่มีนัยสำคัญทางสถิติ (t = 0.43) และเมื่อเปลี่ยนค่าอื่นผลแกว่งระหว่าง -0.02R ถึง +0.09R
+หมายเหตุ: โหมด Multi-TF ใช้เฉพาะ swing liquidity (ไม่ได้ใช้ PDH/PDL / Asian range)

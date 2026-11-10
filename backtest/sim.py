@@ -91,7 +91,7 @@ def candle(o, h, l, c, i, d, P):
 
 @nb.njit(cache=True)
 def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh, pdl,
-        asHi, asLo, asLast, asD0, cfg, Pc):
+        asHi, asLo, asLast, asD0, cfg, Pc, TFo, TFh, TFl, TFc, TFs, TFe, tfIdx):
     # cfg: 0 risk%,1 RR,2 minRR,3 slBufATR,4 maxSLATR,5 maxTrades/day,6 maxDailyLoss%,7 BE_R,8 BEplus$,
     #      9 partial%,10 trail(0/1),11 pendExpBars,12 swingS,13 lookback,14 setupExp,15 mssS,16 dispATR,
     #      17 minFVGATR,18 fvgWait,19 entryMode(0 edge,1 CE,2 mkt),20 pdMode(0 off,1 leg),21 reqCandle,
@@ -367,73 +367,121 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
             if cfg[24] > 0 and g_bias != d:
                 continue
             found = False; best = 0.0; bestT = 0
-            # PDH/PDL
-            if cfg[28] > 0:
-                f0 = dayFirst[t + 1]          # first M5 index of today
-                if f0 >= 0 and f0 <= t and pdh[t + 1] > 0:
-                    L = pdl[t + 1] if d > 0 else pdh[t + 1]
-                    sw = (l[t] < L and c[t] > L) if d > 0 else (h[t] > L and c[t] < L)
-                    if sw:
+            extV = l[t] if d > 0 else h[t]; extIdx = t; cf = 0; Jc = 0
+            if cfg[33] == 0:
+                # PDH/PDL
+                if cfg[28] > 0:
+                    f0 = dayFirst[t + 1]          # first M5 index of today
+                    if f0 >= 0 and f0 <= t and pdh[t + 1] > 0:
+                        L = pdl[t + 1] if d > 0 else pdh[t + 1]
+                        sw = (l[t] < L and c[t] > L) if d > 0 else (h[t] > L and c[t] < L)
+                        if sw:
+                            fresh = True
+                            for jj in range(f0, t):
+                                if (d > 0 and l[jj] < L) or (d < 0 and h[jj] > L):
+                                    fresh = False; break
+                            if fresh:
+                                found = True; best = L; bestT = LVL_PD
+                # Asian range
+                if cfg[29] > 0:
+                    Dn = (now - 420) // 1440 - asD0
+                    if Dn >= 0 and Dn < len(asLast) and asLast[Dn] >= 0 and asLast[Dn] <= t and t + 1 - asLast[Dn] < 400:
+                        L = asLo[Dn] if d > 0 else asHi[Dn]
+                        sw = (l[t] < L and c[t] > L) if d > 0 else (h[t] > L and c[t] < L)
+                        if sw:
+                            fresh = True
+                            for jj in range(asLast[Dn] + 1, t):
+                                if (d > 0 and l[jj] < L) or (d < 0 and h[jj] > L):
+                                    fresh = False; break
+                            if fresh and ((not found) or (d > 0 and L < best) or (d < 0 and L > best)):
+                                found = True; best = L; bestT = LVL_ASIA
+                # swings
+                if cfg[30] > 0:
+                    for k in range(swS + 2, look + 1):
+                        j = t + 1 - k
+                        if d > 0:
+                            if not swing_lo(l, j, swS, t): continue
+                            L = l[j]
+                            if not (l[t] < L and c[t] > L): continue
+                        else:
+                            if not swing_hi(h, j, swS, t): continue
+                            L = h[j]
+                            if not (h[t] > L and c[t] < L): continue
                         fresh = True
-                        for jj in range(f0, t):
-                            if (d > 0 and l[jj] < L) or (d < 0 and h[jj] > L):
-                                fresh = False; break
-                        if fresh:
-                            found = True; best = L; bestT = LVL_PD
-            # Asian range
-            if cfg[29] > 0:
-                Dn = (now - 420) // 1440 - asD0
-                if Dn >= 0 and Dn < len(asLast) and asLast[Dn] >= 0 and asLast[Dn] <= t and t + 1 - asLast[Dn] < 400:
-                    L = asLo[Dn] if d > 0 else asHi[Dn]
-                    sw = (l[t] < L and c[t] > L) if d > 0 else (h[t] > L and c[t] < L)
-                    if sw:
-                        fresh = True
-                        for jj in range(asLast[Dn] + 1, t):
+                        for jj in range(j + 1, t):
                             if (d > 0 and l[jj] < L) or (d < 0 and h[jj] > L):
                                 fresh = False; break
                         if fresh and ((not found) or (d > 0 and L < best) or (d < 0 and L > best)):
-                            found = True; best = L; bestT = LVL_ASIA
-            # swings
-            if cfg[30] > 0:
-                for k in range(swS + 2, look + 1):
-                    j = t + 1 - k
-                    if d > 0:
-                        if not swing_lo(l, j, swS, t): continue
-                        L = l[j]
-                        if not (l[t] < L and c[t] > L): continue
-                    else:
-                        if not swing_hi(h, j, swS, t): continue
-                        L = h[j]
-                        if not (h[t] > L and c[t] < L): continue
-                    fresh = True
-                    for jj in range(j + 1, t):
-                        if (d > 0 and l[jj] < L) or (d < 0 and h[jj] > L):
-                            fresh = False; break
-                    if fresh and ((not found) or (d > 0 and L < best) or (d < 0 and L > best)):
-                        found = True; best = L; bestT = LVL_SWING
+                            found = True; best = L; bestT = LVL_SWING
+            else:
+                # ---- multi-TF sweep: level on TF kk must be swept by a CLOSED candle of TF kk+1 ----
+                for kk in range(int(cfg[34]), int(cfg[35]) + 1):
+                    cfk = kk + 1
+                    J = tfIdx[cfk, t]
+                    if J < 0 or TFe[cfk, J] != t:
+                        continue
+                    js = TFs[cfk, J]
+                    kb = tfIdx[kk, js] - 1
+                    if kb < swS + 1:
+                        continue
+                    jl = TFl[cfk, J]; jh = TFh[cfk, J]; jc = TFc[cfk, J]
+                    qmin = max(kb - look, swS)
+                    for q in range(kb - swS, qmin - 1, -1):
+                        if d > 0:
+                            if not swing_lo(TFl[kk], q, swS, kb): continue
+                            L = TFl[kk, q]
+                            if not (jl < L and jc > L): continue
+                        else:
+                            if not swing_hi(TFh[kk], q, swS, kb): continue
+                            L = TFh[kk, q]
+                            if not (jh > L and jc < L): continue
+                        fresh = True
+                        for qq in range(q + 1, kb + 1):
+                            if (d > 0 and TFl[kk, qq] < L) or (d < 0 and TFh[kk, qq] > L):
+                                fresh = False; break
+                        if fresh and ((not found) or (d > 0 and L < best) or (d < 0 and L > best)):
+                            found = True; best = L; bestT = 10 + kk; cf = cfk; Jc = J
+                if found:
+                    js = TFs[cf, Jc]
+                    extIdx = js
+                    for jj in range(js, t + 1):
+                        if (d > 0 and l[jj] < l[extIdx]) or (d < 0 and h[jj] > h[extIdx]):
+                            extIdx = jj
+                    extV = l[extIdx] if d > 0 else h[extIdx]
             if not found:
                 continue
             # FindMSSLevel
             mss = 0.0
             for k in range(2, look + 1):
                 j = t + 1 - k
+                if j >= extIdx: continue
                 if d > 0 and swing_hi(h, j, mssS, t) and h[j] > c[t]:
                     mss = h[j]; break
                 if d < 0 and swing_lo(l, j, mssS, t) and l[j] < c[t]:
                     mss = l[j]; break
             if mss == 0.0:
                 v = -1e18 if d > 0 else 1e18
-                for k in range(2, 7):
-                    j = t + 1 - k
+                for j in range(extIdx - 5, extIdx):
                     v = max(v, h[j]) if d > 0 else min(v, l[j])
                 if (d > 0 and v > c[t]) or (d < 0 and v < c[t]): mss = v
             if mss == 0.0:
                 continue
             sAct[si] = 1; sZ[si] = 0; sLvl[si] = best; sLt[si] = bestT
-            sExt[si] = l[t] if d > 0 else h[t]
-            sMss[si] = mss; sMssDone[si] = 0; sIdx[si] = t; sAge[si] = 0; sMAge[si] = 0
-            sLeg[si] = h[t] if d > 0 else l[t]
-            sCand[si] = 1 if candle(o, h, l, c, t, d, Pc) else 0
+            sExt[si] = extV
+            sMss[si] = mss; sMssDone[si] = 0; sIdx[si] = extIdx; sAge[si] = 0; sMAge[si] = 0
+            lg = h[extIdx] if d > 0 else l[extIdx]
+            for jj in range(extIdx, t + 1):
+                lg = max(lg, h[jj]) if d > 0 else min(lg, l[jj])
+            sLeg[si] = lg
+            cnd = 0
+            jend = t if cfg[31] <= 0 else min(t, extIdx + int(cfg[31]))
+            for jj in range(extIdx, jend + 1):
+                if candle(o, h, l, c, jj, d, Pc): cnd = 1
+            if cf > 0 and Jc >= 2:      # PA on the bigger-TF confirmation candle itself
+                if (Pc[0] > 0 and is_pin(TFo[cf], TFh[cf], TFl[cf], TFc[cf], Jc, d, Pc[1])) or \
+                   (Pc[2] > 0 and is_engulf(TFo[cf], TFc[cf], Jc, d)):
+                    cnd = 1
+            sCand[si] = cnd
 
     return (L_t[:nt], L_x[:nt], L_d[:nt], L_lv[:nt], L_R[:nt], L_pnl[:nt], L_kz[:nt], L_mkt[:nt],
             eq_t[:ne], eq_v[:ne], bal, LI[:nt], LF[:nt])

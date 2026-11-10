@@ -94,6 +94,12 @@ input int             InpSwingStrength     = 3;          // ความแร�
 input int             InpSwingLookback     = 80;         // มองย้อนหา swing (แท่ง)
 input int             InpSetupExpiryBars   = 20;         // setup หมดอายุถ้าไม่เกิด MSS ภายใน (แท่ง)
 
+input group "=== Multi-TF Sweep (เบรค TF เล็ก -> เช็ค TF ใหญ่ขึ้น 1 ขั้น) ==="
+input bool            InpMTFSweep          = true;        // ใช้ sweep หลาย TF (swing TF เล็ก ต้องถูกยืนยันด้วยแท่ง TF ใหญ่ขึ้น 1 ขั้น)
+input ENUM_TIMEFRAMES InpMTF1              = PERIOD_M15;  // TF ขั้นที่ 1 (ยืนยัน swing ของ TF เข้าเทรด)
+input ENUM_TIMEFRAMES InpMTF2              = PERIOD_H1;   // TF ขั้นที่ 2 (ยืนยัน swing ของขั้นที่ 1)
+input ENUM_TIMEFRAMES InpMTF3              = PERIOD_H4;   // TF ขั้นที่ 3 (ยืนยัน swing ของขั้นที่ 2)
+
 input group "=== MSS / Displacement / FVG ==="
 input int             InpMSSStrength       = 2;          // ความแรง swing ที่ใช้เป็นระดับ MSS
 input double          InpDisplacementATR   = 1.0;        // ตัวแท่ง displacement ขั้นต่ำ (x ATR)
@@ -393,17 +399,17 @@ void CollectLiquidity(int dir, double &lv[], string &nm[], int &fs[])
   }
 
 // ระดับ MSS = swing ฝั่งตรงข้ามล่าสุดก่อน sweep ที่ยังไม่ถูกปิดทะลุ
-double FindMSSLevel(int dir, double closeRef)
+double FindMSSLevel(int dir, double closeRef, int startShift = 2)
   {
    int n = ArraySize(g_r);
-   for(int i = 2; i <= InpSwingLookback && i < n; i++)
+   for(int i = startShift; i <= InpSwingLookback && i < n; i++)
      {
       if(dir > 0 && IsSwingHigh(g_r, i, InpMSSStrength) && g_r[i].high > closeRef) return g_r[i].high;
       if(dir < 0 && IsSwingLow(g_r, i, InpMSSStrength)  && g_r[i].low  < closeRef) return g_r[i].low;
      }
    // fallback: high/low สุดของ 5 แท่งก่อน sweep
    double v = (dir > 0) ? -DBL_MAX : DBL_MAX;
-   for(int i = 2; i <= 6 && i < n; i++)
+   for(int i = startShift; i <= startShift + 4 && i < n; i++)
       v = (dir > 0) ? MathMax(v, g_r[i].high) : MathMin(v, g_r[i].low);
    if(dir > 0 && v > closeRef) return v;
    if(dir < 0 && v < closeRef) return v;
@@ -498,6 +504,70 @@ void ResetSetup(SSetup &s)
    s.zAge      = 0;
   }
 
+string TFName(ENUM_TIMEFRAMES tf)
+  {
+   string n = EnumToString(tf);
+   return StringSubstr(n, 7);                       // "PERIOD_M15" -> "M15"
+  }
+
+bool IsSwingLowFrom(const MqlRates &r[], int i, int s, int minIdx)
+  {
+   if(i - s < minIdx || i + s >= ArraySize(r)) return false;
+   for(int k = 1; k <= s; k++)
+      if(r[i - k].low <= r[i].low || r[i + k].low < r[i].low) return false;
+   return true;
+  }
+
+bool IsSwingHighFrom(const MqlRates &r[], int i, int s, int minIdx)
+  {
+   if(i - s < minIdx || i + s >= ArraySize(r)) return false;
+   for(int k = 1; k <= s; k++)
+      if(r[i - k].high >= r[i].high || r[i + k].high > r[i].high) return false;
+   return true;
+  }
+
+// เช็คว่าแท่ง cfTF ที่เพิ่งปิด กวาด swing ของ lvTF แล้วปิดกลับหรือไม่
+// cf[0] = แท่ง cfTF ที่เพิ่งปิด, cf[1] = แท่งก่อนหน้า
+bool MTFSweep(ENUM_TIMEFRAMES lvTF, ENUM_TIMEFRAMES cfTF, int dir, double &level, MqlRates &cf[])
+  {
+   // แท่ง cfTF ที่มีแท่ง M5 ล่าสุดอยู่ ต้องปิดพอดีตอนนี้
+   if(iTime(_Symbol, cfTF, 0) <= g_r[1].time) return false;
+   ArraySetAsSeries(cf, true);
+   if(CopyRates(_Symbol, cfTF, 1, 2, cf) != 2) return false;
+
+   MqlRates lr[];
+   ArraySetAsSeries(lr, true);
+   int n = CopyRates(_Symbol, lvTF, 0, InpSwingLookback + 2 * InpSwingStrength + 50, lr);
+   if(n < 20) return false;
+   int kb = 0;                                      // แท่ง lvTF ล่าสุดที่จบก่อนแท่งยืนยันเริ่ม
+   while(kb < n && lr[kb].time >= cf[0].time) kb++;
+   if(kb >= n) return false;
+
+   bool found = false;
+   for(int q = kb + InpSwingStrength; q < n - InpSwingStrength && q <= kb + InpSwingLookback; q++)
+     {
+      double L;
+      if(dir > 0)
+        {
+         if(!IsSwingLowFrom(lr, q, InpSwingStrength, kb)) continue;
+         L = lr[q].low;
+         if(!(cf[0].low < L && cf[0].close > L)) continue;
+        }
+      else
+        {
+         if(!IsSwingHighFrom(lr, q, InpSwingStrength, kb)) continue;
+         L = lr[q].high;
+         if(!(cf[0].high > L && cf[0].close < L)) continue;
+        }
+      bool fresh = true;
+      for(int k = kb; k < q; k++)
+         if((dir > 0 && lr[k].low < L) || (dir < 0 && lr[k].high > L)) { fresh = false; break; }
+      if(!fresh) continue;
+      if(!found || (dir > 0 ? L < level : L > level)) { level = L; found = true; }
+     }
+   return found;
+  }
+
 void DetectSweep(int dir)
   {
    int idx = (dir > 0) ? 0 : 1;
@@ -505,27 +575,55 @@ void DetectSweep(int dir)
    if(!BiasAllows(dir))    return;
 
    MqlRates b = g_r[1];
-   double lv[]; string nm[]; int fs[];
-   CollectLiquidity(dir, lv, nm, fs);
-
    bool   found = false;
    double best  = 0;
    string bestName = "";
-   for(int j = 0; j < ArraySize(lv); j++)
+   int    extShift = 1;          // shift ของแท่ง M5 ที่เป็นจุดสุดของ sweep
+   bool   htfCandle = false;     // แท่ง TF ใหญ่ที่ยืนยันเป็น PA เองหรือไม่
+
+   if(!InpMTFSweep)
      {
-      double L = lv[j];
-      bool swept = (dir > 0) ? (b.low < L && b.close > L) : (b.high > L && b.close < L);
-      if(!swept) continue;
-      if(!IsFresh(L, fs[j], dir)) continue;
-      // เลือกระดับที่ลึกที่สุด (liquidity ใหญ่สุดที่ถูกกวาด)
-      if(!found || (dir > 0 ? L < best : L > best))
+      double lv[]; string nm[]; int fs[];
+      CollectLiquidity(dir, lv, nm, fs);
+      for(int j = 0; j < ArraySize(lv); j++)
         {
-         found = true; best = L; bestName = nm[j];
+         double L = lv[j];
+         bool swept = (dir > 0) ? (b.low < L && b.close > L) : (b.high > L && b.close < L);
+         if(!swept) continue;
+         if(!IsFresh(L, fs[j], dir)) continue;
+         // เลือกระดับที่ลึกที่สุด (liquidity ใหญ่สุดที่ถูกกวาด)
+         if(!found || (dir > 0 ? L < best : L > best))
+           {
+            found = true; best = L; bestName = nm[j];
+           }
+        }
+     }
+   else
+     {
+      // swing บน TF[k] นับเป็น sweep เมื่อแท่ง TF[k+1] ที่เพิ่งปิด แทงไส้ผ่านแล้ว "ปิดกลับ"
+      // ถ้าแท่ง TF[k+1] ปิดทะลุ = TF เล็กเบรคจริง -> ระดับนั้นใช้ไม่ได้ ไปดู swing ของ TF[k+1] แทน
+      ENUM_TIMEFRAMES chain[4];
+      chain[0] = InpEntryTF; chain[1] = InpMTF1; chain[2] = InpMTF2; chain[3] = InpMTF3;
+      for(int k = 0; k < 3; k++)
+        {
+         double L = 0; MqlRates cf[];
+         if(!MTFSweep(chain[k], chain[k + 1], dir, L, cf)) continue;
+         if(!found || (dir > 0 ? L < best : L > best))
+           {
+            found = true; best = L;
+            bestName = "Swing " + TFName(chain[k]) + " (ยืนยัน " + TFName(chain[k + 1]) + ")";
+            // หาแท่ง M5 ที่เป็นจุดสุดของไส้ภายในแท่ง TF ใหญ่
+            extShift = 1;
+            for(int i = 1; i < ArraySize(g_r) && g_r[i].time >= cf[0].time; i++)
+               if((dir > 0 && g_r[i].low < g_r[extShift].low) || (dir < 0 && g_r[i].high > g_r[extShift].high))
+                  extShift = i;
+            htfCandle = IsPinBar(cf[0], dir) || IsEngulfing(cf[0], cf[1], dir);
+           }
         }
      }
    if(!found) return;
 
-   double mss = FindMSSLevel(dir, b.close);
+   double mss = FindMSSLevel(dir, b.close, extShift + 1);
    if(mss == 0) return;
 
    SSetup s;
@@ -534,11 +632,17 @@ void DetectSweep(int dir)
    s.dir       = dir;
    s.level     = best;
    s.levelName = bestName;
-   s.extreme   = (dir > 0) ? b.low : b.high;
+   s.extreme   = (dir > 0) ? g_r[extShift].low : g_r[extShift].high;
    s.mssLevel  = mss;
-   s.sweepTime = b.time;
-   s.legFav    = (dir > 0) ? b.high : b.low;
-   s.candleOk  = CandleSignal(dir, 1);
+   s.sweepTime = g_r[extShift].time;
+   s.legFav    = (dir > 0) ? -DBL_MAX : DBL_MAX;
+   for(int i = 1; i <= extShift; i++)
+      s.legFav = (dir > 0) ? MathMax(s.legFav, g_r[i].high) : MathMin(s.legFav, g_r[i].low);
+   // PA ที่ sweep: แท่ง M5 ช่วงไส้ (ภายใน InpSweepPABars แท่ง) หรือแท่ง TF ใหญ่ที่ยืนยันเป็น pin/engulfing เอง
+   s.candleOk  = htfCandle;
+   int lastSh  = (InpSweepPABars <= 0) ? 1 : MathMax(1, extShift - InpSweepPABars);
+   for(int i = extShift; i >= lastSh; i--)
+      if(CandleSignal(dir, i)) s.candleOk = true;
    g_setup[idx] = s;
 
    DrawSweep(s);
