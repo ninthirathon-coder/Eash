@@ -59,3 +59,6 @@ EA ทั้งสองตัวล็อกให้ทำงานเฉพ�
 
 ## ICT_TopDown_EA v1.30
 เพิ่มตามที่ผู้ใช้กำหนด: แท่ง MSS ต้องมี tick volume > ค่าเฉลี่ย 50 แท่ง — ยังไม่ได้ backtest (HistData ไม่มี volume) ต้องใช้ข้อมูล M1 จากโบรกที่มี tick volume
+
+## ICT_TopDown_EA v1.31
+เพดาน SL = 2.5 ATR ของ TF โซน (ผู้ใช้เลือก) → backtest (ไม่รวมตัวกรอง volume) 66 ไม้ +0.246R +15.1% DD -3.9%
