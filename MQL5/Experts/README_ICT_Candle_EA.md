@@ -1,0 +1,59 @@
+# ICT Candle EA (MetaTrader 5)
+
+EA ที่เทรดตามแนวคิด **ICT (Inner Circle Trader)** และใช้ **การอ่านแท่งเทียน** ยืนยันจังหวะกลับตัว
+
+ไฟล์: `MQL5/Experts/ICT_Candle_EA.mq5`
+
+## ลำดับการตัดสินใจของ EA
+
+| ขั้น | แนวคิด | EA ทำอะไร |
+|---|---|---|
+| 1 | **HTF Bias** | ไล่โครงสร้างตลาดบน TF ใหญ่ (ค่าเริ่มต้น H1) ถ้าปิดทะลุ swing high ล่าสุด = ขาขึ้น, ทะลุ swing low = ขาลง (BOS/CHoCH) และเทรดตามทางนั้นเท่านั้น |
+| 2 | **Liquidity** | ทำเครื่องหมายระดับ liquidity: Previous Day High/Low, Asian session High/Low และ Swing High/Low บน TF เล็ก ที่ราคายังไม่เคยแตะ |
+| 3 | **Liquidity Sweep** | แท่งเทียนแทงไส้ทะลุระดับนั้นแล้ว **ปิดกลับเข้ามา** (stop hunt / turtle soup) |
+| 4 | **แท่งเทียนยืนยัน** | หลัง sweep ต้องเจอ Pin bar (Hammer/Shooting star), Engulfing หรือ Morning/Evening star ก่อนเกิด MSS |
+| 5 | **MSS + Displacement** | ราคาปิดทะลุ swing ฝั่งตรงข้าม ด้วยแท่งที่มีเนื้อใหญ่ ≥ 1×ATR |
+| 6 | **FVG** | หา Fair Value Gap ที่เกิดในขา displacement แล้วตั้ง Limit ที่ CE (50% ของ FVG) หรือขอบ FVG |
+| 7 | **Premium / Discount** | ซื้อเฉพาะส่วนที่อยู่ใน discount (ต่ำกว่า 50% ของขา) / ขายใน premium |
+| 8 | **Kill Zone** | ส่งออเดอร์เฉพาะช่วง London (02:00–05:00 NY) และ New York (07:00–10:00 NY) |
+
+**SL** วางหลังไส้ sweep + buffer (0.1×ATR) · **TP** ใช้ RR คงที่ หรือ liquidity ฝั่งตรงข้าม  
+**จัดการออเดอร์**: ได้กำไร 1R → ปิด 50% + กันทุน → เลื่อน SL ตาม swing ถัดไป  
+Limit ที่ไม่ถูกแมตช์จะถูกยกเลิกหลัง 12 แท่ง หรือเมื่อราคาวิ่งถึง TP ไปก่อน
+
+## วิธีติดตั้ง
+
+1. เปิด MT5 → `File > Open Data Folder`
+2. คัดลอก `ICT_Candle_EA.mq5` ไปไว้ที่ `MQL5/Experts/`
+3. เปิด MetaEditor → เปิดไฟล์ → กด **Compile** (F7)
+4. ลากไปใส่กราฟ (TF ไหนก็ได้ EA ใช้ `InpEntryTF` / `InpHTF` ที่ตั้งไว้) แล้วเปิด Algo Trading
+
+## ค่าที่ต้องตั้งให้ตรงกับโบรกเกอร์
+
+- **`InpServerMinusNY`** = เวลาเซิร์ฟเวอร์ลบเวลานิวยอร์ก โบรกส่วนใหญ่ที่ใช้ GMT+2/+3 (ตามเวลาฤดูร้อนของ US) = **7** ซึ่งจะถูกต้องทั้งปีโดยไม่ต้องปรับ DST เอง ถ้าโบรกใช้ GMT+0 ให้ตั้ง 4 หรือ 5 ตามฤดู
+- **`InpMaxSpreadPoints`** ทองคำ (XAUUSD) ที่ราคา 2 ทศนิยมอาจต้องตั้ง 30–50, ที่ 3 ทศนิยมตั้ง 300–500
+
+## ค่าเริ่มต้นที่แนะนำ
+
+| ตลาด | Entry TF | HTF | หมายเหตุ |
+|---|---|---|---|
+| XAUUSD | M5 | H1 | ค่าเริ่มต้นตามไฟล์ |
+| EURUSD / GBPUSD | M5 หรือ M15 | H1 / H4 | ลอง `InpDisplacementATR` = 1.2 |
+| NAS100 / US30 | M1 หรือ M5 | M15 / H1 | ใช้แค่ NY Kill Zone |
+
+- อยากได้สัญญาณมากขึ้น: ปิด `InpRequireCandle` หรือตั้ง `InpPDMode = PD_OFF` หรือลด `InpDisplacementATR`
+- อยากกรองแรงขึ้น: `InpBiasMode = BIAS_STRUCTURE_AND_EMA`, `InpPDMode = PD_HTF`
+- ถ้าใช้ `ENTRY_MARKET` ตัวกรอง `PD_LEG` จะถูกข้าม (ราคาตอนเกิด MSS อยู่ฝั่ง premium/discount ผิดเสมอ)
+
+## บนกราฟ
+
+- ลูกศรน้ำเงิน/แดง = จุด sweep, เส้นประสีทอง = ระดับ liquidity ที่ถูกกวาด
+- กล่องเขียว/แดง = FVG ที่ใช้เข้าออเดอร์
+- มุมซ้ายบน = Bias ปัจจุบัน, อยู่ใน Kill Zone หรือไม่, สถานะ setup ฝั่ง Buy/Sell
+
+## ข้อควรรู้
+
+- **ทดสอบใน Strategy Tester และบัญชีเดโมก่อนเสมอ** ใช้โหมด "Every tick based on real ticks" เพราะ EA ใช้ Limit order และกันทุนระหว่างแท่ง
+- ICT เป็นวิธีที่ต้องตีความ EA นี้แปลงเป็นกฎตายตัว ผลจึงอาจต่างจากการเทรดด้วยมือ
+- ไม่มีตัวกรองข่าว ควรปิด EA ช่วงข่าวแรง (NFP, CPI, FOMC)
+- ผลในอดีตไม่รับประกันผลในอนาคต การเทรด Forex/CFD มีความเสี่ยงสูง
