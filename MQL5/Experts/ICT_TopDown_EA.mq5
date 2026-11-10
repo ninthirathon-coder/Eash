@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.00"
+#property version     "1.10"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -59,7 +59,7 @@ input int             InpMSSStrength      = 2;          // ความแรง
 input double          InpDisplacementATR1 = 1.0;        // เนื้อแท่ง displacement ขั้นต่ำ (x ATR M1)
 input double          InpMinFVGATR1       = 0.3;        // ขนาด FVG ขั้นต่ำ (x ATR M1)
 input int             InpFVGWaitM1        = 5;          // รอ FVG หลัง MSS ได้กี่แท่ง
-input int             InpPAWaitM1         = 15;         // รอ PA ใน FVG ได้กี่แท่ง
+input int             InpPAWaitM1         = 10;         // รอ PA ใน FVG ได้กี่แท่ง (backtest: สั้นกว่า = ดีกว่า)
 input bool            InpUsePinBar        = true;       // PA: Pin bar
 input bool            InpUseEngulfing     = true;       // PA: Engulfing
 input bool            InpUseStar          = true;       // PA: Morning / Evening star
@@ -87,6 +87,7 @@ input double          InpLondonStart      = 2.0;
 input double          InpLondonEnd        = 5.0;
 input double          InpNYStart          = 7.0;
 input double          InpNYEnd            = 10.0;
+input bool            InpSkipMonday       = true;       // ไม่เทรดวันจันทร์ (เวลา NY)
 
 input group "=== แสดงผล ==="
 input bool            InpDraw             = true;       // วาด sweep / FVG
@@ -561,6 +562,12 @@ double SwingTarget(const STD &s, double entry, double spread)
 // 0 = ยังเข้าไม่ได้ (รอ), 1 = เข้าแล้ว, -1 = ยกเลิก setup
 int Enter(STD &s)
   {
+   if(InpSkipMonday)
+     {
+      MqlDateTime ny;
+      TimeToStruct((datetime)((long)TimeCurrent() - (long)InpServerMinusNY * 3600), ny);
+      if(ny.day_of_week == 1) { g_status = "วันจันทร์: ไม่เทรด"; return -1; }
+     }
    if(!InKZ())      { g_status = "PA เกิดนอก Kill Zone"; return 0; }
    if(HasPosition()) { g_status = "มีออเดอร์อยู่แล้ว"; return 0; }
    long spPts = SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);

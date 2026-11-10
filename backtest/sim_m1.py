@@ -53,6 +53,18 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 px = slpx if hitSL else oTP
                 pnl = od * (px - oE) * contract * oLots
                 bal += pnl; oPnl += pnl; dayPL += pnl; closed = True
+            elif oBE and cfg[41] > 0:
+                # trail behind the latest confirmed M1 swing after break-even
+                ts2 = int(cfg[41])
+                for j in range(t - ts2, t - 200, -1):
+                    if od > 0 and swing_lo(l, j, ts2, t):
+                        nsl = l[j] - 0.5 * atr1[t]
+                        if nsl > oSL: oSL = nsl
+                        break
+                    if od < 0 and swing_hi(h, j, ts2, t):
+                        nsl = h[j] + 0.5 * atr1[t] + spread
+                        if nsl < oSL: oSL = nsl
+                        break
             elif (not oBE) and cfg[5] > 0 and t > oFill + 0:
                 fav = (bh - oE) if od > 0 else (oE - (bl + spread))
                 if fav >= cfg[5] * oRisk:
@@ -209,12 +221,24 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             # ---------------- entry ----------------
             hr = ((now - 420) % 1440) / 60.0
             kz = 0
-            if cfg[18] > 0 and hr >= 2.0 and hr < 5.0: kz = 1
-            if cfg[19] > 0 and hr >= 7.0 and hr < 10.0: kz = 2
+            if cfg[18] > 0 and hr >= cfg[35] and hr < cfg[36]: kz = 1
+            if cfg[19] > 0 and hr >= cfg[37] and hr < cfg[38]: kz = 2
             if cfg[18] == 0 and cfg[19] == 0: kz = 3
             if kz == 0 or st != 0: continue
+            dow = ((now - 420) // 1440 + 3) % 7          # NY weekday, Monday = 0
+            if dow < 5 and ((int(cfg[39]) >> dow) & 1) == 0: sA[sd] = 0; continue
             if cfg[4] > 0 and dayTrades >= cfg[4]: continue
             entry = o[t + 1] + (spread if d > 0 else 0.0)
+            # premium / discount
+            if cfg[40] == 1 and pdh[t + 1] > 0:
+                mid = (pdh[t + 1] + pdl[t + 1]) / 2.0          # previous day range
+                if (d > 0 and entry > mid) or (d < 0 and entry < mid): sA[sd] = 0; continue
+            elif cfg[40] == 2:
+                ex2 = sExt[sd]                                  # dealing range: zone formation -> sweep
+                for jj in range(max(sF[sd], 0), sEI[sd] + 1):
+                    ex2 = max(ex2, h[jj]) if d > 0 else min(ex2, l[jj])
+                mid = (ex2 + sExt[sd]) / 2.0
+                if (d > 0 and entry > mid) or (d < 0 and entry < mid): sA[sd] = 0; continue
             sl = sExt[sd] - d * cfg[2] * a1
             if cfg[26] == 1:
                 az = aH1[t] if sTF[sd] == 1 else aH4[t]
