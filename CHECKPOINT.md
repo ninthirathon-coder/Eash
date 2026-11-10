@@ -56,3 +56,6 @@ EA ทั้งสองตัวล็อกให้ทำงานเฉพ�
 
 ## ICT_TopDown_EA v1.20 (ไอเดียจาก PDF)
 ทดสอบ 8 ไอเดียจาก PDF ผ่าน 1 ข้อ: TP1 = swing (ปิด 50% + กันทุน), TP2 = ขอบ dealing range → 69 ไม้ +0.276R t=1.9
+
+## ICT_TopDown_EA v1.30
+เพิ่มตามที่ผู้ใช้กำหนด: แท่ง MSS ต้องมี tick volume > ค่าเฉลี่ย 50 แท่ง — ยังไม่ได้ backtest (HistData ไม่มี volume) ต้องใช้ข้อมูล M1 จากโบรกที่มี tick volume

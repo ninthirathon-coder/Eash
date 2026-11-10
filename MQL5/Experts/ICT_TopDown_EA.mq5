@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.20"
+#property version     "1.30"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -57,6 +57,9 @@ input int             InpSetupExpiryM1    = 30;         // ต้องเกิ
 input int             InpSweepPABars      = 3;          // PA กลับตัวต้องเกิดภายในกี่แท่งจากจุดสุดของไส้ (0=ไม่บังคับ)
 input int             InpMSSStrength      = 2;          // ความแรง swing M1 ที่ใช้เป็นระดับ MSS
 input double          InpDisplacementATR1 = 1.0;        // เนื้อแท่ง displacement ขั้นต่ำ (x ATR M1)
+input bool            InpMSSVolumeFilter  = true;       // แท่ง MSS ต้องมี tick volume มากกว่าค่าเฉลี่ย
+input int             InpMSSVolumeBars    = 50;         // จำนวนแท่ง M1 ที่ใช้หาค่าเฉลี่ย volume
+input double          InpMSSVolumeMult    = 1.0;        // volume แท่ง MSS ต้อง > ค่าเฉลี่ย x เท่านี้
 input double          InpMinFVGATR1       = 0.3;        // ขนาด FVG ขั้นต่ำ (x ATR M1)
 input int             InpFVGWaitM1        = 5;          // รอ FVG หลัง MSS ได้กี่แท่ง
 input int             InpPAWaitM1         = 10;         // รอ PA ใน FVG ได้กี่แท่ง (backtest: สั้นกว่า = ดีกว่า)
@@ -265,6 +268,23 @@ bool PA(const MqlRates &r[], int i, int d)
    return false;
   }
 
+// tick volume ของแท่ง M1 ที่เพิ่งปิด เทียบค่าเฉลี่ย InpMSSVolumeBars แท่งก่อนหน้า (ไม่รวมตัวเอง)
+bool MSSVolumeOK()
+  {
+   int n = InpMSSVolumeBars;
+   if(n < 1 || ArraySize(g_r) < n + 2) return true;
+   double sum = 0;
+   for(int i = 2; i <= n + 1; i++) sum += (double)g_r[i].tick_volume;
+   double avg = sum / n;
+   if(avg <= 0)
+     {
+      static bool warned = false;
+      if(!warned) { Print("โบรกไม่ส่ง tick volume (เป็น 0) -> ข้ามตัวกรอง volume ของ MSS"); warned = true; }
+      return true;
+     }
+   return (double)g_r[1].tick_volume > InpMSSVolumeMult * avg;
+  }
+
 void Reset(STD &s)
   {
    s.active = false; s.dir = 0; s.level = 0; s.tf = 0; s.ext = 0; s.extT = 0; s.age = 0; s.phase = 0;
@@ -450,6 +470,9 @@ void Progress(STD &s)
          if(rng > 0 && body >= InpDisplacementATR1 * g_a1 && body / rng >= 0.5) { disp = true; break; }
         }
       if(!disp) return;
+      // แท่ง MSS (แท่งที่ปิดทะลุ swing) ต้องมี volume มากกว่าค่าเฉลี่ย N แท่งก่อนหน้า
+      // ถ้า volume ไม่ถึง: แท่งนี้ยังไม่นับเป็น MSS แต่ setup ยังรอแท่งถัดไปได้จนหมดเวลา
+      if(InpMSSVolumeFilter && !MSSVolumeOK()) { g_status = "MSS แต่ volume ต่ำกว่าค่าเฉลี่ย"; return; }
       if(InpSweepPABars > 0 && !s.cand) { Reset(s); return; }
       s.phase = 1; s.mAge = 0;
       return;
