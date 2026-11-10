@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.11"
+#property version     "1.20"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -76,7 +76,9 @@ input double          InpMinRR            = 0.8;        // RR ขั้นต่
 input double          InpFixedRR          = 2.0;        // RR (โหมด RR คงที่)
 
 input group "=== จัดการออเดอร์ ==="
-input double          InpBE_R             = 1.0;        // ถึงกี่ R แล้วกันทุน (0=ปิด)
+input bool            InpUseTP2           = true;       // TP1 = swing (ปิดบางส่วน+กันทุน), TP2 = ขอบ dealing range
+input double          InpTP1ClosePct      = 50;         // ปิดที่ TP1 กี่ %
+input double          InpBE_R             = 1.0;        // (เมื่อไม่ใช้ TP2) ถึงกี่ R แล้วกันทุน 0=ปิด
 input double          InpPartialPct       = 50;         // ปิดบางส่วนตอนกันทุน (%)
 input int             InpBEPlusPoints     = 10;         // กันทุนบวก (points) ทอง 2 ทศนิยม: 10 = $0.10
 
@@ -116,6 +118,7 @@ struct STD
    double   zT, zB;
    int      zAge;
    bool     cand;
+   datetime formed;   // เวลาที่โซนเกิด (ใช้หาขอบ dealing range สำหรับ TP2)
   };
 
 //--- globals
@@ -265,7 +268,7 @@ bool PA(const MqlRates &r[], int i, int d)
 void Reset(STD &s)
   {
    s.active = false; s.dir = 0; s.level = 0; s.tf = 0; s.ext = 0; s.extT = 0; s.age = 0; s.phase = 0;
-   s.mss = 0; s.mAge = 0; s.zT = 0; s.zB = 0; s.zAge = 0; s.cand = false;
+   s.mss = 0; s.mAge = 0; s.zT = 0; s.zB = 0; s.zAge = 0; s.cand = false; s.formed = 0;
   }
 
 string TFName(int tf) { return tf == 1 ? "H1" : tf == 2 ? "H4" : "PDH/PDL"; }
@@ -402,7 +405,7 @@ void OnNewM1()
       if(!hit || g_s[sd].active) continue;
       if(!BiasOK(d)) continue;
       STD s; Reset(s);
-      s.active = true; s.dir = d; s.level = z.price; s.tf = z.tf;
+      s.active = true; s.dir = d; s.level = z.price; s.tf = z.tf; s.formed = z.formed;
       s.ext = d > 0 ? g_r[1].low : g_r[1].high; s.extT = g_r[1].time; s.age = -1;
       g_s[sd] = s;
       DrawSweep(s);
@@ -559,6 +562,36 @@ double SwingTarget(const STD &s, double entry, double spread)
    return 0;
   }
 
+// ขอบ dealing range: สูงสุด (Buy) / ต่ำสุด (Sell) ตั้งแต่โซนเกิดจนถึงจุดสุดของไส้
+double RangeEdge(const STD &s, double spread)
+  {
+   int d = s.dir;
+   double ex = d > 0 ? -DBL_MAX : DBL_MAX;
+   int hFrom = iBarShift(_Symbol, PERIOD_H1, s.formed, false);
+   int hTo   = iBarShift(_Symbol, PERIOD_H1, s.extT, false);
+   if(hFrom < 0 || hTo < 0) return 0;
+   if(hFrom > hTo)                                   // แท่ง H1 ที่จบก่อนแท่งที่มีจุดสุดของไส้
+     {
+      int cnt = hFrom - hTo;
+      int k = d > 0 ? iHighest(_Symbol, PERIOD_H1, MODE_HIGH, cnt, hTo + 1) : iLowest(_Symbol, PERIOD_H1, MODE_LOW, cnt, hTo + 1);
+      if(k >= 0) ex = d > 0 ? iHigh(_Symbol, PERIOD_H1, k) : iLow(_Symbol, PERIOD_H1, k);
+     }
+   datetime hs = (datetime)MathMax((long)iTime(_Symbol, PERIOD_H1, hTo), (long)s.formed);   // ส่วนที่เหลือดูบน M1 ถึงจุดสุดของไส้
+   int mFrom = iBarShift(_Symbol, PERIOD_M1, hs, false), mTo = Sh(s.extT);
+   if(mFrom >= mTo && mTo >= 0)
+     {
+      int cnt = mFrom - mTo + 1;
+      int k = d > 0 ? iHighest(_Symbol, PERIOD_M1, MODE_HIGH, cnt, mTo) : iLowest(_Symbol, PERIOD_M1, MODE_LOW, cnt, mTo);
+      if(k >= 0)
+        {
+         double v = d > 0 ? iHigh(_Symbol, PERIOD_M1, k) : iLow(_Symbol, PERIOD_M1, k);
+         ex = d > 0 ? MathMax(ex, v) : MathMin(ex, v);
+        }
+     }
+   if(ex == DBL_MAX || ex == -DBL_MAX) return 0;
+   return d > 0 ? ex : ex + spread;
+  }
+
 // 0 = ยังเข้าไม่ได้ (รอ), 1 = เข้าแล้ว, -1 = ยกเลิก setup
 int Enter(STD &s)
   {
@@ -607,15 +640,25 @@ int Enter(STD &s)
    else tp = entry + d * InpFixedRR * risk;
    if(d * (tp - entry) / risk < InpMinRR) return -1;
 
+   // TP1 / TP2: เป้าแรก = swing (ปิดบางส่วน + กันทุน), เป้าสุดท้าย = ขอบ dealing range ถ้าไกลกว่า
+   double tp1 = tp;
+   string tag = "";
+   if(InpUseTP2)
+     {
+      double tp2 = RangeEdge(s, spread);
+      if(tp2 != 0 && d * (tp2 - tp1) > 0) { tp = tp2; tag = "|T1=" + DoubleToString(NP(tp1), _Digits); }
+      else tag = "|NB";                               // ไม่มีเป้าที่สอง: ถือถึง TP ไม่กันทุน (ตาม backtest)
+     }
+
    double lots = CalcLots(risk);
    if(lots <= 0) return -1;
    sl = NP(sl); tp = NP(tp);
-   string cmt = InpComment + " " + TFName(s.tf);
+   string cmt = InpComment + tag;
    bool ok = d > 0 ? trade.Buy(lots, _Symbol, 0, sl, tp, cmt) : trade.Sell(lots, _Symbol, 0, sl, tp, cmt);
    if(ok && trade.ResultRetcode() == TRADE_RETCODE_DONE)
      {
-      PrintFormat("[%s] zone %s %.2f | lots %.2f entry %.2f SL %.2f TP %.2f RR %.2f",
-                  d > 0 ? "BUY" : "SELL", TFName(s.tf), s.level, lots, entry, sl, tp, d * (tp - entry) / risk);
+      PrintFormat("[%s] zone %s %.2f | lots %.2f entry %.2f SL %.2f TP1 %.2f TP %.2f RR1 %.2f",
+                  d > 0 ? "BUY" : "SELL", TFName(s.tf), s.level, lots, entry, sl, tp1, tp, d * (tp1 - entry) / risk);
       return 1;
      }
    PrintFormat("ส่งออเดอร์ไม่สำเร็จ %d %s", trade.ResultRetcode(), trade.ResultRetcodeDescription());
@@ -625,9 +668,17 @@ int Enter(STD &s)
 //==================================================================//
 //                        position management                        //
 //==================================================================//
+// อ่าน TP1 จากคอมเมนต์ออเดอร์ ("...|T1=2034.55") ; -1 = ไม่กันทุน ("|NB") ; 0 = ไม่มีข้อมูล (ใช้กฎ 1R)
+double ParseTP1(string cmt)
+  {
+   if(StringFind(cmt, "|NB") >= 0) return -1;
+   int p = StringFind(cmt, "|T1=");
+   if(p < 0) return 0;
+   return StringToDouble(StringSubstr(cmt, p + 4));
+  }
+
 void ManagePositions()
   {
-   if(InpBE_R <= 0) return;
    long stLvl = SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
    double stops = (double)stLvl * _Point;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
@@ -641,7 +692,18 @@ void ManagePositions()
       double risk = d * (open - sl);
       if(risk <= 0) continue;                                     // กันทุนแล้ว
       double px = d > 0 ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-      if(d * (px - open) < InpBE_R * risk) continue;
+      double tp1 = ParseTP1(PositionGetString(POSITION_COMMENT));
+      double closePct = InpPartialPct;
+      if(tp1 < 0) continue;                                       // ไม่มี TP2: ถือถึง TP
+      if(tp1 > 0)
+        {
+         if(d * (px - tp1) < 0) continue;                          // ยังไม่ถึง TP1
+         closePct = InpTP1ClosePct;
+        }
+      else
+        {
+         if(InpBE_R <= 0 || d * (px - open) < InpBE_R * risk) continue;
+        }
       double newSL = NP(open + d * InpBEPlusPoints * _Point);
       if(d * (px - newSL) <= stops) continue;
       // เลื่อน SL กันทุนก่อน -> สำเร็จแล้วค่อยปิดบางส่วน
@@ -651,11 +713,11 @@ void ManagePositions()
          PrintFormat("เลื่อน SL กันทุนไม่สำเร็จ #%I64u: %d %s", tk, trade.ResultRetcode(), trade.ResultRetcodeDescription());
          continue;
         }
-      if(InpPartialPct > 0)
+      if(closePct > 0)
         {
          double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP), vmin = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
          if(step <= 0) step = 0.01;
-         double cv = MathFloor(vol * InpPartialPct / 100.0 / step + 1e-9) * step;
+         double cv = MathFloor(vol * closePct / 100.0 / step + 1e-9) * step;
          if(cv >= vmin && vol - cv >= vmin - 1e-9)
            {
             cv = NormalizeDouble(cv, (int)MathMax(0, MathCeil(-MathLog10(step) - 1e-9)));

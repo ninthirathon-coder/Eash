@@ -7,7 +7,8 @@ from sim import swing_hi, swing_lo, candle, htf_trend
 
 @nb.njit(cache=True)
 def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
-           H1h, H1l, H4h, H4l, b1, b4, cfg, Pc, aH1, aH4, H1st, H4st, prevDS, h1gid, h4gid):
+           H1h, H1l, H4h, H4l, b1, b4, cfg, Pc, aH1, aH4, H1st, H4st, prevDS, h1gid, h4gid,
+           H1en, H4en, prevDE, wStart, pwh, pwl, prevWS, prevWE, mOpen, dBias, agL, agH):
     # cfg: 0 risk%,1 RR,2 slBufATR1,3 maxDepthATR5,4 maxTrades/day,5 BE_R,6 BEplus,7 partial%,8 setupExp(M1 bars),
     # 9 mssS,10 dispATR1,11 minFVGATR1,12 fvgWait,13 paWait,14 entryMode(0 FVG+PA, 1 market at MSS),
     # 15 spread,16 startBal,17 biasMode(0 none,1 H1,2 H4,3 both),18 lon,19 ny,20 useH1,21 useH4,22 usePD,
@@ -24,7 +25,9 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     CAP = 64
     lvP = np.zeros((2, CAP)); lvT = np.zeros((2, CAP), np.int64); nl = np.zeros(2, np.int64)
     lvF = np.zeros((2, CAP), np.int64)   # M1 index where the level was formed
-    sF = np.zeros(2, np.int64)
+    lvE = np.zeros((2, CAP), np.int64); lvQ = np.zeros((2, CAP), np.int64)
+    sF = np.zeros(2, np.int64); sFE = np.zeros(2, np.int64); sLg = np.zeros(2)
+    oTP1 = 0.0; oT1 = False
     # setups
     sA = np.zeros(2, np.int64); sL = np.zeros(2); sTF = np.zeros(2, np.int64); sExt = np.zeros(2); sEI = np.zeros(2, np.int64)
     sAge = np.zeros(2, np.int64); sPh = np.zeros(2, np.int64); sMss = np.zeros(2); sMA = np.zeros(2, np.int64)
@@ -53,6 +56,13 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 px = slpx if hitSL else oTP
                 pnl = od * (px - oE) * contract * oLots
                 bal += pnl; oPnl += pnl; dayPL += pnl; closed = True
+            elif (not oT1) and ((od > 0 and bh >= oTP1) or (od < 0 and bl + spread <= oTP1)):
+                oT1 = True; oBE = True
+                cv = np.floor(oLots * cfg[50] / 100.0 / 0.01 + 1e-9) * 0.01
+                if cv >= 0.01 and oLots - cv >= 0.01 - 1e-9:
+                    pnl = od * (oTP1 - oE) * contract * cv
+                    bal += pnl; oPnl += pnl; dayPL += pnl; oLots -= cv
+                oSL = oE + od * cfg[6]
             elif oBE and cfg[41] > 0:
                 # trail behind the latest confirmed M1 swing after break-even
                 ts2 = int(cfg[41])
@@ -65,7 +75,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                         nsl = h[j] + 0.5 * atr1[t] + spread
                         if nsl < oSL: oSL = nsl
                         break
-            elif (not oBE) and cfg[5] > 0 and t > oFill + 0:
+            elif (not oBE) and cfg[5] > 0 and cfg[48] == 0 and t > oFill + 0:
                 fav = (bh - oE) if od > 0 else (oE - (bl + spread))
                 if fav >= cfg[5] * oRisk:
                     oBE = True
@@ -94,9 +104,16 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
         if cfg[22] > 0 and dayStart[t + 1] == t + 1 and pdh[t + 1] > 0:
             for sd in range(2):
                 if nl[sd] == CAP:
-                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]; lvF[sd, q] = lvF[sd, q + 1]
+                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]; lvF[sd, q] = lvF[sd, q + 1]; lvE[sd, q] = lvE[sd, q + 1]; lvQ[sd, q] = lvQ[sd, q + 1]
                     nl[sd] -= 1
-                lvP[sd, nl[sd]] = pdl[t + 1] if sd == 0 else pdh[t + 1]; lvT[sd, nl[sd]] = 3; lvF[sd, nl[sd]] = prevDS[t + 1]; nl[sd] += 1
+                lvP[sd, nl[sd]] = pdl[t + 1] if sd == 0 else pdh[t + 1]; lvT[sd, nl[sd]] = 3; lvF[sd, nl[sd]] = prevDS[t + 1]; lvE[sd, nl[sd]] = prevDE[t + 1]; lvQ[sd, nl[sd]] = 0; nl[sd] += 1
+        if cfg[44] > 0 and wStart[t + 1] == t + 1 and pwh[t + 1] > 0:
+            for sd in range(2):
+                if nl[sd] == CAP:
+                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]; lvF[sd, q] = lvF[sd, q + 1]; lvE[sd, q] = lvE[sd, q + 1]; lvQ[sd, q] = lvQ[sd, q + 1]
+                    nl[sd] -= 1
+                lvP[sd, nl[sd]] = pwl[t + 1] if sd == 0 else pwh[t + 1]; lvT[sd, nl[sd]] = 5
+                lvF[sd, nl[sd]] = prevWS[t + 1]; lvE[sd, nl[sd]] = prevWE[t + 1]; lvQ[sd, nl[sd]] = 0; nl[sd] += 1
         for tf in range(2):
             use = cfg[20] if tf == 0 else cfg[21]
             g = h1c_at[t] if tf == 0 else h4c_at[t]
@@ -112,22 +129,28 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 # still untouched by the current M1 bar?
                 if (sd == 0 and l[t] < P) or (sd == 1 and h[t] > P): continue
                 if nl[sd] == CAP:
-                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]; lvF[sd, q] = lvF[sd, q + 1]
+                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]; lvF[sd, q] = lvF[sd, q + 1]; lvE[sd, q] = lvE[sd, q + 1]; lvQ[sd, q] = lvQ[sd, q + 1]
                     nl[sd] -= 1
-                lvP[sd, nl[sd]] = P; lvT[sd, nl[sd]] = 1 + tf; lvF[sd, nl[sd]] = H1st[k] if tf == 0 else H4st[k]; nl[sd] += 1
+                eq = 0
+                tol = cfg[43] * (aH1[t] if tf == 0 else aH4[t])
+                for q in range(nl[sd]):
+                    if lvT[sd, q] == 1 + tf and abs(lvP[sd, q] - P) <= tol:
+                        eq = 1; lvQ[sd, q] = 1
+                lvP[sd, nl[sd]] = P; lvT[sd, nl[sd]] = 1 + tf; lvF[sd, nl[sd]] = H1st[k] if tf == 0 else H4st[k]
+                lvE[sd, nl[sd]] = H1en[k] if tf == 0 else H4en[k]; lvQ[sd, nl[sd]] = eq; nl[sd] += 1
 
         # ---------------- zones taken this bar -> new setups ----------------
         for sd in range(2):
             d = 1 if sd == 0 else -1          # lows swept -> buy setup
-            best = 0.0; bt = 0; fnd = False; bf = 0
+            best = 0.0; bt = 0; fnd = False; bf = 0; be = 0; bq = 0
             q = 0
             while q < nl[sd]:
                 P = lvP[sd, q]
                 if (sd == 0 and l[t] < P) or (sd == 1 and h[t] > P):
                     if (not fnd) or (d > 0 and P < best) or (d < 0 and P > best) or (P == best and lvT[sd, q] > bt):
-                        best = P; bt = lvT[sd, q]; fnd = True; bf = lvF[sd, q]
+                        best = P; bt = lvT[sd, q]; fnd = True; bf = lvF[sd, q]; be = lvE[sd, q]; bq = lvQ[sd, q]
                     for r in range(q, nl[sd] - 1):
-                        lvP[sd, r] = lvP[sd, r + 1]; lvT[sd, r] = lvT[sd, r + 1]; lvF[sd, r] = lvF[sd, r + 1]
+                        lvP[sd, r] = lvP[sd, r + 1]; lvT[sd, r] = lvT[sd, r + 1]; lvF[sd, r] = lvF[sd, r + 1]; lvE[sd, r] = lvE[sd, r + 1]; lvQ[sd, r] = lvQ[sd, r + 1]
                     nl[sd] -= 1
                 else:
                     q += 1
@@ -138,6 +161,10 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 if b1[t] != d: continue
             if bm == 2 or bm == 3:
                 if b4[t] != d: continue
+            if cfg[42] > 0 and bt == 1 and bq == 0: continue          # H1 zone must be equal highs/lows
+            if cfg[47] == 1 and dBias[t] != d: continue               # daily bias strict
+            if cfg[47] == 2 and dBias[t] == -d: continue              # daily bias loose
+            sFE[sd] = be
             sA[sd] = 1; sF[sd] = bf; sL[sd] = best; sTF[sd] = bt; sExt[sd] = l[t] if d > 0 else h[t]; sEI[sd] = t
             sAge[sd] = -1; sPh[sd] = 0; sMss[sd] = 0.0; sCand[sd] = 0; sSw[sd] = t
 
@@ -146,6 +173,10 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             if sA[sd] == 0: continue
             d = 1 if sd == 0 else -1
             sAge[sd] += 1
+            if sAge[sd] == 0: sLg[sd] = h[t] if d > 0 else l[t]
+            if (d > 0 and l[t] < sExt[sd]) or (d < 0 and h[t] > sExt[sd]):
+                sLg[sd] = h[t] if d > 0 else l[t]
+            sLg[sd] = max(sLg[sd], h[t]) if d > 0 else min(sLg[sd], l[t])
             if sPh[sd] == 0:
                 if sAge[sd] > cfg[8]:
                     sA[sd] = 0; continue
@@ -229,6 +260,24 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             if dow < 5 and ((int(cfg[39]) >> dow) & 1) == 0: sA[sd] = 0; continue
             if cfg[4] > 0 and dayTrades >= cfg[4]: continue
             entry = o[t + 1] + (spread if d > 0 else 0.0)
+            if cfg[46] > 0 and mOpen[t + 1] > 0:                       # Power of 3: buy below / sell above NY midnight open
+                if (d > 0 and entry > mOpen[t + 1]) or (d < 0 and entry < mOpen[t + 1]): sA[sd] = 0; continue
+            if cfg[45] > 0:                                             # OTE: retracement of the displacement leg
+                rg = d * (sLg[sd] - sExt[sd])
+                if rg <= 0 or d * (sLg[sd] - entry) / rg < cfg[45]: sA[sd] = 0; continue
+            if cfg[49] > 0:                                             # SMT gold vs silver
+                ps = np.nan
+                for jj in range(max(sF[sd], 0), sFE[sd] + 1):
+                    v = agL[jj] if d > 0 else agH[jj]
+                    if v == v:
+                        if ps != ps: ps = v
+                        elif (d > 0 and v < ps) or (d < 0 and v > ps): ps = v
+                if ps != ps: sA[sd] = 0; continue
+                broke2 = False
+                for jj in range(sFE[sd] + 1, sEI[sd] + 1):
+                    v = agL[jj] if d > 0 else agH[jj]
+                    if v == v and ((d > 0 and v < ps) or (d < 0 and v > ps)): broke2 = True; break
+                if broke2: sA[sd] = 0; continue                          # silver confirmed the sweep -> no divergence
             # premium / discount
             if cfg[40] == 1 and pdh[t + 1] > 0:
                 mid = (pdh[t + 1] + pdl[t + 1]) / 2.0          # previous day range
@@ -277,8 +326,15 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 if tp == 0.0: sA[sd] = 0; continue
                 tp = tp - d * cfg[32]
                 if d * (tp - entry) / risk < cfg[31]: sA[sd] = 0; continue
+            tp1 = tp
+            if cfg[48] > 0:                                             # TP1 = swing, TP2 = dealing-range edge
+                ex = -1e18 if d > 0 else 1e18
+                for jj in range(max(sF[sd], 0), sEI[sd] + 1):
+                    ex = max(ex, h[jj]) if d > 0 else min(ex, l[jj] + spread)
+                if d * (ex - tp1) > 0: tp = ex
             lots = np.floor(bal * cfg[0] / 100.0 / (risk * contract) / 0.01 + 1e-9) * 0.01
             if lots < 0.01: sA[sd] = 0; continue
+            oTP1 = tp1; oT1 = not (cfg[48] > 0 and d * (tp - tp1) > 0)
             st = 2; od = d; oE = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots
             oRisk = risk; oPnl = 0.0; oBE = False; oFill = t + 1; oTF = sTF[sd]; oKZ = kz; oL = sL[sd]
             oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]
