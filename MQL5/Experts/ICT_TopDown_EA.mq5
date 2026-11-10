@@ -130,8 +130,23 @@ const string PFX = "ICTTD_";
 const int ZCAP = 64;
 
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| EA นี้เทรดเฉพาะทองคำ (XAUUSD / GOLD) เท่านั้น                         |
+//+------------------------------------------------------------------+
+bool IsGoldSymbol()
+  {
+   string s = _Symbol;
+   StringToUpper(s);
+   return (StringFind(s, "XAU") >= 0 || StringFind(s, "GOLD") >= 0);
+  }
+
 int OnInit()
   {
+   if(!IsGoldSymbol())
+     {
+      Alert(MQLInfoString(MQL_PROGRAM_NAME), ": เทรดเฉพาะทองคำ (XAUUSD/GOLD) - ไม่ทำงานบน ", _Symbol);
+      return(INIT_FAILED);
+     }
    hA1  = iATR(_Symbol, PERIOD_M1, 14);
    hA5  = iATR(_Symbol, PERIOD_M5, 14);
    hAH1 = iATR(_Symbol, PERIOD_H1, 14);

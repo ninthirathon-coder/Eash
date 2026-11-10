@@ -168,8 +168,23 @@ const string PFX   = "ICTEA_";
 ulong    g_partialDone[];     // ticket ที่ปิดบางส่วนแล้ว (กันปิดซ้ำ)
 
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| EA นี้เทรดเฉพาะทองคำ (XAUUSD / GOLD) เท่านั้น                         |
+//+------------------------------------------------------------------+
+bool IsGoldSymbol()
+  {
+   string s = _Symbol;
+   StringToUpper(s);
+   return (StringFind(s, "XAU") >= 0 || StringFind(s, "GOLD") >= 0);
+  }
+
 int OnInit()
   {
+   if(!IsGoldSymbol())
+     {
+      Alert(MQLInfoString(MQL_PROGRAM_NAME), ": เทรดเฉพาะทองคำ (XAUUSD/GOLD) - ไม่ทำงานบน ", _Symbol);
+      return(INIT_FAILED);
+     }
    if(InpEntryTF != PERIOD_CURRENT && InpHTF != PERIOD_CURRENT &&
       PeriodSeconds(InpHTF) <= PeriodSeconds(InpEntryTF))
       Print("คำเตือน: HTF ควรใหญ่กว่า TF เข้าเทรด");
