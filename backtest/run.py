@@ -40,10 +40,10 @@ idx = np.flatnonzero(inA)
 np.maximum.at(asHi, Dn[idx] - asD0, h[idx]); np.minimum.at(asLo, Dn[idx] - asD0, l[idx])
 np.maximum.at(asLast, Dn[idx] - asD0, idx)
 
-# multi-TF arrays built from M5: 0=M5 1=M15 2=H1 3=H4
-TFo = np.zeros((4, n)); TFh = np.zeros((4, n)); TFl = np.zeros((4, n)); TFc = np.zeros((4, n))
-TFs = np.zeros((4, n), np.int64); TFe = np.zeros((4, n), np.int64); tfIdx = np.zeros((4, n), np.int64)
-for k, P in enumerate((5, 15, 60, 240)):
+# multi-TF arrays built from M5: 0=M5 1=M15 2=M30 3=H1 4=H4
+TFo = np.zeros((5, n)); TFh = np.zeros((5, n)); TFl = np.zeros((5, n)); TFc = np.zeros((5, n))
+TFs = np.zeros((5, n), np.int64); TFe = np.zeros((5, n), np.int64); tfIdx = np.zeros((5, n), np.int64)
+for k, P in enumerate((5, 15, 30, 60, 240)):
     key = t5 // P
     stt = np.flatnonzero(np.r_[True, key[1:] != key[:-1]]); enn = np.r_[stt[1:], n] - 1
     m = len(stt)
@@ -55,7 +55,7 @@ for k, P in enumerate((5, 15, 60, 240)):
 BASE = dict(risk=1.0, RR=2.0, minRR=1.5, slBuf=0.1, maxSL=3.0, maxTrades=2, maxDL=3.0, BE=1.0, BEplus=0.10,
             partial=50, trail=1, pendExp=12, swS=3, look=80, setupExp=20, mssS=2, disp=1.0, minFVG=0.15,
             fvgWait=3, entry=1, pd=1, reqCandle=1, spread=0.30, bal=10000, useBias=1, lon=1, nyk=1, comm=0.0,
-            pdhl=1, asia=1, swing=1, pin=1, pinR=2.0, eng=1, star=1, sweepPA=0, paWait=12, mtf=0, mtfMin=0, mtfMax=2)
+            pdhl=1, asia=1, swing=1, pin=1, pinR=2.0, eng=1, star=1, sweepPA=0, paWait=12, mtf=0, mtfMin=0, mtfMax=3)
 ORDER = ['risk', 'RR', 'minRR', 'slBuf', 'maxSL', 'maxTrades', 'maxDL', 'BE', 'BEplus', 'partial', 'trail',
          'pendExp', 'swS', 'look', 'setupExp', 'mssS', 'disp', 'minFVG', 'fvgWait', 'entry', 'pd', 'reqCandle',
          'spread', 'bal', 'useBias', 'lon', 'nyk', 'comm', 'pdhl', 'asia', 'swing', 'sweepPA', 'paWait', 'mtf', 'mtfMin', 'mtfMax']

@@ -97,8 +97,9 @@ input int             InpSetupExpiryBars   = 20;         // setup หมดอ�
 input group "=== Multi-TF Sweep (เบรค TF เล็ก -> เช็ค TF ใหญ่ขึ้น 1 ขั้น) ==="
 input bool            InpMTFSweep          = true;        // ใช้ sweep หลาย TF (swing TF เล็ก ต้องถูกยืนยันด้วยแท่ง TF ใหญ่ขึ้น 1 ขั้น)
 input ENUM_TIMEFRAMES InpMTF1              = PERIOD_M15;  // TF ขั้นที่ 1 (ยืนยัน swing ของ TF เข้าเทรด)
-input ENUM_TIMEFRAMES InpMTF2              = PERIOD_H1;   // TF ขั้นที่ 2 (ยืนยัน swing ของขั้นที่ 1)
-input ENUM_TIMEFRAMES InpMTF3              = PERIOD_H4;   // TF ขั้นที่ 3 (ยืนยัน swing ของขั้นที่ 2)
+input ENUM_TIMEFRAMES InpMTF2              = PERIOD_M30;  // TF ขั้นที่ 2 (ยืนยัน swing ของขั้นที่ 1)
+input ENUM_TIMEFRAMES InpMTF3              = PERIOD_H1;   // TF ขั้นที่ 3 (ยืนยัน swing ของขั้นที่ 2)
+input ENUM_TIMEFRAMES InpMTF4              = PERIOD_H4;   // TF ขั้นที่ 4 (ยืนยัน swing ของขั้นที่ 3)
 
 input group "=== MSS / Displacement / FVG ==="
 input int             InpMSSStrength       = 2;          // ความแรง swing ที่ใช้เป็นระดับ MSS
@@ -602,9 +603,9 @@ void DetectSweep(int dir)
      {
       // swing บน TF[k] นับเป็น sweep เมื่อแท่ง TF[k+1] ที่เพิ่งปิด แทงไส้ผ่านแล้ว "ปิดกลับ"
       // ถ้าแท่ง TF[k+1] ปิดทะลุ = TF เล็กเบรคจริง -> ระดับนั้นใช้ไม่ได้ ไปดู swing ของ TF[k+1] แทน
-      ENUM_TIMEFRAMES chain[4];
-      chain[0] = InpEntryTF; chain[1] = InpMTF1; chain[2] = InpMTF2; chain[3] = InpMTF3;
-      for(int k = 0; k < 3; k++)
+      ENUM_TIMEFRAMES chain[5];
+      chain[0] = InpEntryTF; chain[1] = InpMTF1; chain[2] = InpMTF2; chain[3] = InpMTF3; chain[4] = InpMTF4;
+      for(int k = 0; k < 4; k++)
         {
          double L = 0; MqlRates cf[];
          if(!MTFSweep(chain[k], chain[k + 1], dir, L, cf)) continue;
