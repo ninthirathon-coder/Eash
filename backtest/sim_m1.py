@@ -27,6 +27,11 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     L_tf = np.zeros(MAXT, np.int64); L_R = np.zeros(MAXT); L_pnl = np.zeros(MAXT); L_kz = np.zeros(MAXT, np.int64)
     L_risk = np.zeros(MAXT); L_ent = np.zeros(MAXT); L_sl = np.zeros(MAXT); L_tp = np.zeros(MAXT); L_lvl = np.zeros(MAXT)
     L_tp1 = np.zeros(MAXT); L_mss = np.zeros(MAXT); oMssP = 0.0
+    L_kind = np.zeros(MAXT, np.int64); oKind = 0
+    cA = np.zeros(2, np.int64); cExt = np.zeros(2); cL = np.zeros(2); cTF = np.zeros(2, np.int64); cF = np.zeros(2, np.int64)
+    cEI = np.zeros(2, np.int64); cLeg = np.zeros(2); cPL = np.zeros(2); cAge = np.zeros(2, np.int64); cPh = np.zeros(2, np.int64)
+    cBI = np.zeros(2, np.int64); cMA = np.zeros(2, np.int64); cZT = np.zeros(2); cZB = np.zeros(2); cZA = np.zeros(2, np.int64)
+    cSw = np.zeros(2, np.int64)
     L_sw = np.zeros(MAXT, np.int64); L_mi = np.zeros(MAXT, np.int64); L_zt = np.zeros(MAXT); L_zb = np.zeros(MAXT)
     nt = 0
     # active HTF levels: side 0 = lows (sell-side liquidity), 1 = highs
@@ -99,7 +104,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 L_t[nt] = t1[oFill]; L_x[nt] = t1[t]; L_d[nt] = od; L_tf[nt] = oTF; L_kz[nt] = oKZ
                 L_pnl[nt] = oPnl; L_R[nt] = oPnl / (oRisk * contract * oLots0); L_risk[nt] = oRisk
                 L_ent[nt] = oE; L_sl[nt] = oSL if not oBE else oE - od * oRisk; L_tp[nt] = oTP; L_lvl[nt] = oL
-                L_tp1[nt] = oTP1; L_mss[nt] = oMssP; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
+                L_tp1[nt] = oTP1; L_mss[nt] = oMssP; L_kind[nt] = oKind; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
                 nt += 1; st = 0
 
         now = t1[t + 1]
@@ -228,12 +233,14 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             elif sPh[sd] == 1:
                 sMA[sd] += 1
                 if sMA[sd] > cfg[12]:
+                    if cfg[52] > 0 and cA[sd] == 0: cA[sd] = 1; cExt[sd] = sExt[sd]; cL[sd] = sL[sd]; cTF[sd] = sTF[sd]; cF[sd] = sF[sd]; cEI[sd] = sEI[sd]; cLeg[sd] = sLg[sd]; cPL[sd] = 1e18 if d > 0 else -1e18; cAge[sd] = 0; cPh[sd] = 0; cSw[sd] = sSw[sd]
                     sA[sd] = 0; rej[6] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 6, d, sL[sd], sTF[sd]); continue
                 if (d > 0 and l[t] < sExt[sd]) or (d < 0 and h[t] > sExt[sd]):
                     sA[sd] = 0; rej[7] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 7, d, sL[sd], sTF[sd]); continue
             elif sPh[sd] == 2:
                 sZA[sd] += 1
                 if sZA[sd] > cfg[13]:
+                    if cfg[52] > 0 and cA[sd] == 0: cA[sd] = 1; cExt[sd] = sExt[sd]; cL[sd] = sL[sd]; cTF[sd] = sTF[sd]; cF[sd] = sF[sd]; cEI[sd] = sEI[sd]; cLeg[sd] = sLg[sd]; cPL[sd] = 1e18 if d > 0 else -1e18; cAge[sd] = 0; cPh[sd] = 0; cSw[sd] = sSw[sd]
                     cdx = sBlk[sd] if sBlk[sd] > 0 else 8; rej[cdx] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], cdx, d, sL[sd], sTF[sd]); sA[sd] = 0; continue
                 if (d > 0 and (c[t] < sZB[sd] or l[t] < sExt[sd])) or (d < 0 and (c[t] > sZT[sd] or h[t] > sExt[sd])):
                     sA[sd] = 0; rej[9] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 9, d, sL[sd], sTF[sd]); continue
@@ -355,7 +362,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             oTP1 = tp1; oT1 = not (cfg[48] > 0 and d * (tp - tp1) > 0)
             st = 2; od = d; oE = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots
             oRisk = risk; oPnl = 0.0; oBE = False; oFill = t + 1; oTF = sTF[sd]; oKZ = kz; oL = sL[sd]
-            oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]; oMssP = sMss[sd]
+            oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]; oMssP = sMss[sd]; oKind = 0
             dayTrades += 1
             sA[sd] = 0; rej[18] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 18, d, sL[sd], sTF[sd])
             # fill bar: conservative SL check on the fill bar itself
@@ -364,8 +371,106 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 bal += pnl; oPnl += pnl; dayPL += pnl
                 L_t[nt] = t1[t + 1]; L_x[nt] = t1[t + 1]; L_d[nt] = od; L_tf[nt] = oTF; L_kz[nt] = oKZ
                 L_pnl[nt] = oPnl; L_R[nt] = -1.0; L_risk[nt] = risk; L_ent[nt] = oE; L_sl[nt] = sl; L_tp[nt] = oTP
-                L_lvl[nt] = oL; L_tp1[nt] = oTP1; L_mss[nt] = oMssP; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
+                L_lvl[nt] = oL; L_tp1[nt] = oTP1; L_mss[nt] = oMssP; L_kind[nt] = oKind; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
                 nt += 1; st = 0
 
+        # ================= continuation (trend-follow) after a missed reversal =================
+        if cfg[52] > 0:
+            for sd in range(2):
+                if cA[sd] == 0: continue
+                d = 1 if sd == 0 else -1
+                cAge[sd] += 1
+                if cAge[sd] > cfg[53]: cA[sd] = 0; continue
+                if (d > 0 and c[t] < cExt[sd]) or (d < 0 and c[t] > cExt[sd]): cA[sd] = 0; continue   # reversal failed
+                if cPh[sd] == 0:
+                    if d > 0: cPL[sd] = min(cPL[sd], l[t])
+                    else: cPL[sd] = max(cPL[sd], h[t])
+                    brk = c[t] > cLeg[sd] if d > 0 else c[t] < cLeg[sd]
+                    dsp = False
+                    for i in range(3):
+                        jj = t - i
+                        body = d * (c[jj] - o[jj]); rng = h[jj] - l[jj]
+                        if rng > 0 and body >= cfg[10] * a1 and body / rng >= 0.5: dsp = True; break
+                    if brk and dsp:
+                        cPh[sd] = 1; cBI[sd] = t; cMA[sd] = 0
+                    elif (d > 0 and h[t] > cLeg[sd]) or (d < 0 and l[t] < cLeg[sd]):
+                        cLeg[sd] = h[t] if d > 0 else l[t]          # new extreme without a clean BOS -> raise the bar
+                        cPL[sd] = l[t] if d > 0 else h[t]
+                    continue
+                if cPh[sd] == 1:
+                    cMA[sd] += 1
+                    if cMA[sd] > cfg[12]: cA[sd] = 0; continue
+                    for i in range(1, 7):
+                        a_ = t + 1 - i; b_ = t - 1 - i
+                        if d > 0:
+                            if l[a_] <= h[b_]: continue
+                            gT = l[a_]; gB = h[b_]
+                        else:
+                            if h[a_] >= l[b_]: continue
+                            gT = l[b_]; gB = h[a_]
+                        if gT - gB < cfg[11] * a1: continue
+                        if (d > 0 and gB <= cPL[sd]) or (d < 0 and gT >= cPL[sd]): continue
+                        fl = False
+                        for k2 in range(1, i):
+                            jj = t + 1 - k2
+                            if (d > 0 and l[jj] <= gB) or (d < 0 and h[jj] >= gT): fl = True
+                        if fl: continue
+                        cPh[sd] = 2; cZT[sd] = gT; cZB[sd] = gB; cZA[sd] = 0
+                        break
+                    continue
+                # phase 2: pullback into the BOS FVG + PA
+                cZA[sd] += 1
+                if cZA[sd] > cfg[13]: cA[sd] = 0; continue
+                if (d > 0 and c[t] < cZB[sd]) or (d < 0 and c[t] > cZT[sd]): cA[sd] = 0; continue
+                touched = l[t] <= cZT[sd] if d > 0 else h[t] >= cZB[sd]
+                if not (touched and candle(o, h, l, c, t, d, Pc)): continue
+                hr = ((now - 420) % 1440) / 60.0
+                kz = 0
+                if cfg[18] > 0 and hr >= cfg[35] and hr < cfg[36]: kz = 1
+                if cfg[19] > 0 and hr >= cfg[37] and hr < cfg[38]: kz = 2
+                if cfg[18] == 0 and cfg[19] == 0: kz = 3
+                if kz == 0 or st != 0: continue
+                dow = ((now - 420) // 1440 + 3) % 7
+                if dow < 5 and ((int(cfg[39]) >> dow) & 1) == 0: cA[sd] = 0; continue
+                if cfg[4] > 0 and dayTrades >= cfg[4]: continue
+                entry = o[t + 1] + (spread if d > 0 else 0.0)
+                az = aH1[t] if cTF[sd] == 1 else aH4[t]
+                if cfg[54] == 0: sl = cL[sd] - d * cfg[27] * az            # same structural SL as the reversal
+                else: sl = cPL[sd] - d * cfg[55] * az                     # below the pullback (higher low)
+                risk = d * (entry - sl)
+                if risk <= 0: cA[sd] = 0; continue
+                if cfg[51] > 0 and risk > cfg[51] * az: cA[sd] = 0; continue
+                if spread / risk > cfg[23]: cA[sd] = 0; continue
+                # targets: swing before the reversal (TF of the zone), else dealing-range edge
+                use4 = cTF[sd] == 2
+                HH = H4h if use4 else H1h
+                LL = H4l if use4 else H1l
+                gS = h4gid[cEI[sd]] if use4 else h1gid[cEI[sd]]
+                ts = int(cfg[33]); tsw = 0.0
+                for k in range(gS - 1, max(gS - 300, ts) - 1, -1):
+                    if d > 0 and swing_hi(HH, k, ts, gS) and HH[k] > entry: tsw = HH[k]; break
+                    if d < 0 and swing_lo(LL, k, ts, gS) and LL[k] + spread < entry: tsw = LL[k] + spread; break
+                ex = -1e18 if d > 0 else 1e18
+                for jj in range(max(cF[sd], 0), cEI[sd] + 1):
+                    ex = max(ex, h[jj]) if d > 0 else min(ex, l[jj] + spread)
+                tp1 = tsw if (tsw != 0.0 and d * (tsw - entry) / risk >= cfg[31]) else ex
+                tp = ex if d * (ex - tp1) > 0 else tp1
+                if d * (tp1 - entry) / risk < cfg[31]: cA[sd] = 0; continue
+                lots = np.floor(bal * cfg[0] / 100.0 / (risk * contract) / 0.01 + 1e-9) * 0.01
+                if lots < 0.01: cA[sd] = 0; continue
+                oTP1 = tp1; oT1 = not (d * (tp - tp1) > 0)
+                st = 2; od = d; oE = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots
+                oRisk = risk; oPnl = 0.0; oBE = False; oFill = t + 1; oTF = cTF[sd]; oKZ = kz; oL = cL[sd]
+                oSw = cSw[sd]; oMI = cBI[sd]; oZT = cZT[sd]; oZB = cZB[sd]; oMssP = cLeg[sd]; oKind = 1
+                dayTrades += 1
+                cA[sd] = 0
+                if (d > 0 and l[t + 1] <= sl) or (d < 0 and h[t + 1] + spread >= sl):
+                    pnl = -risk * contract * lots
+                    bal += pnl; oPnl += pnl; dayPL += pnl
+                    L_t[nt] = t1[t + 1]; L_x[nt] = t1[t + 1]; L_d[nt] = od; L_tf[nt] = oTF; L_kz[nt] = oKZ
+                    L_pnl[nt] = oPnl; L_R[nt] = -1.0; L_risk[nt] = risk; L_ent[nt] = oE; L_sl[nt] = sl; L_tp[nt] = oTP
+                    L_lvl[nt] = oL; L_tp1[nt] = oTP1; L_mss[nt] = oMssP; L_kind[nt] = oKind; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
+                    nt += 1; st = 0
+
     return (L_t[:nt], L_x[:nt], L_d[:nt], L_tf[:nt], L_R[:nt], L_pnl[:nt], L_kz[:nt], L_risk[:nt],
-            L_ent[:nt], L_sl[:nt], L_tp[:nt], L_lvl[:nt], L_sw[:nt], L_mi[:nt], L_zt[:nt], L_zb[:nt], rej, EV[:min(ne2, 60000)], L_tp1[:nt], L_mss[:nt])
+            L_ent[:nt], L_sl[:nt], L_tp[:nt], L_lvl[:nt], L_sw[:nt], L_mi[:nt], L_zt[:nt], L_zb[:nt], rej, EV[:min(ne2, 60000)], L_tp1[:nt], L_mss[:nt], L_kind[:nt])
