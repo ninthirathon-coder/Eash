@@ -415,6 +415,25 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                             found = True; best = L; bestT = LVL_SWING
             else:
                 # ---- multi-TF sweep: level on TF kk must be swept by a CLOSED candle of TF kk+1 ----
+                if cfg[36] > 0:
+                    # M1 swing confirmed by the M5 candle that just closed (bar t)
+                    kb = m5s[t] - 1
+                    qmin = max(kb - look, swS)
+                    for q in range(kb - swS, qmin - 1, -1):
+                        if d > 0:
+                            if not swing_lo(m1l, q, swS, kb): continue
+                            L = m1l[q]
+                            if not (l[t] < L and c[t] > L): continue
+                        else:
+                            if not swing_hi(m1h, q, swS, kb): continue
+                            L = m1h[q]
+                            if not (h[t] > L and c[t] < L): continue
+                        fresh = True
+                        for qq in range(q + 1, kb + 1):
+                            if (d > 0 and m1l[qq] < L) or (d < 0 and m1h[qq] > L):
+                                fresh = False; break
+                        if fresh and ((not found) or (d > 0 and L < best) or (d < 0 and L > best)):
+                            found = True; best = L; bestT = 9; cf = 0; Jc = t
                 for kk in range(int(cfg[34]), int(cfg[35]) + 1):
                     cfk = kk + 1
                     J = tfIdx[cfk, t]
