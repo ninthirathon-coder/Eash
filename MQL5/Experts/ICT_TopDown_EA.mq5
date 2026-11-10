@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.10"
+#property version     "1.11"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -644,13 +644,25 @@ void ManagePositions()
       if(d * (px - open) < InpBE_R * risk) continue;
       double newSL = NP(open + d * InpBEPlusPoints * _Point);
       if(d * (px - newSL) <= stops) continue;
+      // เลื่อน SL กันทุนก่อน -> สำเร็จแล้วค่อยปิดบางส่วน
+      // (ถ้าเลื่อน SL ไม่สำเร็จ จะไม่ปิดบางส่วน และลองใหม่ tick ถัดไป จึงไม่มีการปิดซ้ำ)
+      if(!trade.PositionModify(tk, newSL, tp) || trade.ResultRetcode() != TRADE_RETCODE_DONE)
+        {
+         PrintFormat("เลื่อน SL กันทุนไม่สำเร็จ #%I64u: %d %s", tk, trade.ResultRetcode(), trade.ResultRetcodeDescription());
+         continue;
+        }
       if(InpPartialPct > 0)
         {
          double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP), vmin = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+         if(step <= 0) step = 0.01;
          double cv = MathFloor(vol * InpPartialPct / 100.0 / step + 1e-9) * step;
-         if(cv >= vmin && vol - cv >= vmin - 1e-9) trade.PositionClosePartial(tk, cv);
+         if(cv >= vmin && vol - cv >= vmin - 1e-9)
+           {
+            cv = NormalizeDouble(cv, (int)MathMax(0, MathCeil(-MathLog10(step) - 1e-9)));
+            if(!trade.PositionClosePartial(tk, cv))
+               PrintFormat("ปิดบางส่วนไม่สำเร็จ #%I64u: %d %s", tk, trade.ResultRetcode(), trade.ResultRetcodeDescription());
+           }
         }
-      if(PositionSelectByTicket(tk)) trade.PositionModify(tk, newSL, tp);
      }
   }
 
