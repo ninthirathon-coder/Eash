@@ -37,6 +37,8 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     mssS = int(cfg[9])
 
     for t in range(300, n - 1):
+        if cfg[34] > 0:
+            spread = cfg[34] * c[t]          # spread as a fraction of price
         # ---------------- execution on bar t ----------------
         if st == 2 and t > oFill:
             bo = o[t]; bh = h[t]; bl = l[t]

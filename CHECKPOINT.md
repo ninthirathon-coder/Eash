@@ -32,5 +32,18 @@ Commit checkpoint: `fc492b3` บน branch `claude/intelligent-pasteur-f8c6jd`
 
 ## ขั้นต่อไป
 - [x] เขียน EA ตัวใหม่ `MQL5/Experts/ICT_TopDown_EA.mq5` ตามแนวทาง Top-down (ค่าตามแถวตัวหนา) — ดู `MQL5/Experts/README_ICT_TopDown_EA.md`
-- [ ] Compile + Strategy Tester ด้วยข้อมูลโบรก
+- [ ] Compile + Strategy Tester ด้วยข้อมูลโบรก (ยังไม่ได้: รันตัวติดตั้ง MT5 ใน Wine ไม่ได้รับอนุญาตในเครื่องคลาวด์)
+- [x] Walk-forward + ทดสอบตลาดอื่น (ดูหัวข้อด้านล่าง)
 - [ ] Forward test บนเดโม
+
+## Walk-forward และตลาดอื่น (`backtest/wf.py`)
+15 ชุดค่า (SL: ไส้ M1 / พ้นโซน 1.0-2.0 ATR × TP: 2R / swing RR≥0.8 / swing RR≥1.0)
+in-sample = ถึงปี 2017, out-of-sample = 2018 ขึ้นไป, spread เป็น % ของราคา
+
+| ตลาด | ชุดที่ดีสุดช่วงแรก → ผลช่วงหลัง | OOS เป็นบวก | ค่า EA (SL 1.5, swing RR≥0.8) ทั้งช่วง |
+|---|---|---|---|
+| XAUUSD 2009-2026 | +0.167R → +0.012R | 9/15 | 94 ไม้, +0.139R |
+| EURUSD 2010-2025 | +0.175R → -0.221R | 0/15 | 120 ไม้, -0.095R |
+| NAS100 2010-2025 | +0.271R → +0.482R (14 ไม้) | 10/15 | 58 ไม้, +0.083R |
+
+สรุป: SL พ้นโซนดีกว่า SL ไส้ M1 บนทองและ NAS100 แต่ใช้ไม่ได้กับ EURUSD; ค่าที่ดีสุดในช่วงแรกไม่การันตีช่วงหลัง; ไม้น้อยเกินจะสรุปว่ามี edge
