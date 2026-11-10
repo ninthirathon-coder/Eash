@@ -70,6 +70,7 @@ input double          InpPinWickRatio     = 2.0;        // ไส้/เนื�
 
 input group "=== SL / TP ==="
 input double          InpSLZoneATR        = 1.5;        // SL พ้นโซน (x ATR ของ TF โซน)
+input double          InpMaxSLZoneATR     = 0.0;        // เพดานระยะ SL (x ATR ของ TF โซน) เกินนี้ไม่เข้า 0=ปิด (ลอง 2.0)
 input double          InpSLBufATR1        = 0.5;        // ระยะเผื่อหลังไส้ M1 (x ATR M1) ใช้ถ้าไส้ลึกกว่าโซน
 input double          InpMaxM1SLATR5      = 3.0;        // คัด setup: SL ตามโครงสร้าง M1 ต้องไม่เกิน (x ATR M5)
 input double          InpMaxSpreadToSL    = 0.2;        // คัด setup: spread / SL โครงสร้าง M1 ไม่เกิน
@@ -653,6 +654,7 @@ int Enter(STD &s)
    if(d * (slM1 - sl) < 0) sl = slM1;
    double risk = d * (entry - sl);
    if(risk <= 0) return -1;
+   if(InpMaxSLZoneATR > 0 && risk > InpMaxSLZoneATR * az) { g_status = "SL ไกลเกินเพดาน"; return -1; }
 
    double tp;
    if(InpTPMode == TD_TP_SWING)

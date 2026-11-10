@@ -83,10 +83,10 @@ agL = np.where(_m, _ag['m1l'][_i], np.nan); agH = np.where(_m, _ag['m1h'][_i], n
 BASE = dict(risk=1.0, RR=2.0, slBuf=0.5, maxDepth=3.0, maxTrades=2, BE=1.0, BEplus=0.10, partial=50, setupExp=30,
             mssS=2, disp=1.0, minFVG=0.3, fvgWait=5, paWait=15, entry=0, spread=0.30, bal=10000, bias=0,
             lon=1, nyk=1, useH1=1, useH4=1, usePD=1, maxSpR=0.2, maxSL=3.0, sweepPA=3,
-            pin=1, pinR=2.0, eng=1, star=1, slMode=0, slK=0.5, maxSLz=3.0, filtM1=0, tpMode=0, minRR=1.0, tpBuf=0.0, tpS=2, spreadRel=0.0, lonS=2.0, lonE=5.0, nyS=7.0, nyE=10.0, dowMask=31, pdF=0, trail=0, eqOnly=0, eqTol=0.1, usePW=0, ote=0.0, po3=0, dbias=0, tp2=0, smt=0, tp2Pct=50)
+            pin=1, pinR=2.0, eng=1, star=1, slMode=0, slK=0.5, maxSLz=3.0, filtM1=0, tpMode=0, minRR=1.0, tpBuf=0.0, tpS=2, spreadRel=0.0, lonS=2.0, lonE=5.0, nyS=7.0, nyE=10.0, dowMask=31, pdF=0, trail=0, eqOnly=0, eqTol=0.1, usePW=0, ote=0.0, po3=0, dbias=0, tp2=0, smt=0, tp2Pct=50, maxSLzone=0.0)
 ORDER = ['risk', 'RR', 'slBuf', 'maxDepth', 'maxTrades', 'BE', 'BEplus', 'partial', 'setupExp', 'mssS', 'disp',
          'minFVG', 'fvgWait', 'paWait', 'entry', 'spread', 'bal', 'bias', 'lon', 'nyk', 'useH1', 'useH4', 'usePD',
-         'maxSpR', 'maxSL', 'sweepPA', 'slMode', 'slK', 'maxSLz', 'filtM1', 'tpMode', 'minRR', 'tpBuf', 'tpS', 'spreadRel', 'lonS', 'lonE', 'nyS', 'nyE', 'dowMask', 'pdF', 'trail', 'eqOnly', 'eqTol', 'usePW', 'ote', 'po3', 'dbias', 'tp2', 'smt', 'tp2Pct']
+         'maxSpR', 'maxSL', 'sweepPA', 'slMode', 'slK', 'maxSLz', 'filtM1', 'tpMode', 'minRR', 'tpBuf', 'tpS', 'spreadRel', 'lonS', 'lonE', 'nyS', 'nyE', 'dowMask', 'pdF', 'trail', 'eqOnly', 'eqTol', 'usePW', 'ote', 'po3', 'dbias', 'tp2', 'smt', 'tp2Pct', 'maxSLzone']
 TFN = {1: 'H1', 2: 'H4', 3: 'PDH/PDL', 5: 'PWH/PWL'}
 
 
@@ -99,7 +99,7 @@ def go(**kw):
                H1['en'], H4['en'], prevDE, wStart, pwh, pwl, prevWS, prevWE, mOpen, dBias, agL, agH)
     cols = ['tin', 'tout', 'dir', 'tf', 'R', 'pnl', 'kz', 'risk', 'entry', 'sl', 'tp', 'lvl', 'sw', 'mi', 'zt', 'zb']
     T = pd.DataFrame({k: v for k, v in zip(cols, r[:16])})
-    T.attrs['rej'] = r[16]; T.attrs['ev'] = r[17]
+    T.attrs['rej'] = r[16]; T.attrs['ev'] = r[17]; T['tp1'] = r[18]; T['msspx'] = r[19]
     T['date'] = pd.to_datetime(T.tin * 60, unit='s')
     return T
 

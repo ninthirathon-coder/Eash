@@ -26,6 +26,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     L_t = np.zeros(MAXT, np.int64); L_x = np.zeros(MAXT, np.int64); L_d = np.zeros(MAXT, np.int64)
     L_tf = np.zeros(MAXT, np.int64); L_R = np.zeros(MAXT); L_pnl = np.zeros(MAXT); L_kz = np.zeros(MAXT, np.int64)
     L_risk = np.zeros(MAXT); L_ent = np.zeros(MAXT); L_sl = np.zeros(MAXT); L_tp = np.zeros(MAXT); L_lvl = np.zeros(MAXT)
+    L_tp1 = np.zeros(MAXT); L_mss = np.zeros(MAXT); oMssP = 0.0
     L_sw = np.zeros(MAXT, np.int64); L_mi = np.zeros(MAXT, np.int64); L_zt = np.zeros(MAXT); L_zb = np.zeros(MAXT)
     nt = 0
     # active HTF levels: side 0 = lows (sell-side liquidity), 1 = highs
@@ -98,7 +99,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 L_t[nt] = t1[oFill]; L_x[nt] = t1[t]; L_d[nt] = od; L_tf[nt] = oTF; L_kz[nt] = oKZ
                 L_pnl[nt] = oPnl; L_R[nt] = oPnl / (oRisk * contract * oLots0); L_risk[nt] = oRisk
                 L_ent[nt] = oE; L_sl[nt] = oSL if not oBE else oE - od * oRisk; L_tp[nt] = oTP; L_lvl[nt] = oL
-                L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
+                L_tp1[nt] = oTP1; L_mss[nt] = oMssP; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
                 nt += 1; st = 0
 
         now = t1[t + 1]
@@ -302,12 +303,15 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 mid = (ex2 + sExt[sd]) / 2.0
                 if (d > 0 and entry > mid) or (d < 0 and entry < mid): sA[sd] = 0; continue
             sl = sExt[sd] - d * cfg[2] * a1
-            if cfg[26] == 1:
+            if cfg[26] == 1 or cfg[26] == 2:
                 az = aH1[t] if sTF[sd] == 1 else aH4[t]
-                sl2 = sL[sd] - d * cfg[27] * az          # beyond the HTF zone
+                anchor = sL[sd] if cfg[26] == 1 else sExt[sd]   # 1 = from the zone level, 2 = from the sweep wick
+                sl2 = anchor - d * cfg[27] * az
                 if d * (sl - sl2) > 0: sl = sl2
             risk = d * (entry - sl)
             if risk <= 0: sA[sd] = 0; continue
+            if cfg[51] > 0 and cfg[26] >= 1:
+                if risk > cfg[51] * (aH1[t] if sTF[sd] == 1 else aH4[t]): sA[sd] = 0; rej[19] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 19, d, sL[sd], sTF[sd]); continue
             if cfg[29] > 0:
                 # filters judged on the M1-structure SL (selects the same setups), SL actually placed beyond the zone
                 r1 = d * (entry - (sExt[sd] - d * cfg[2] * a1))
@@ -351,7 +355,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             oTP1 = tp1; oT1 = not (cfg[48] > 0 and d * (tp - tp1) > 0)
             st = 2; od = d; oE = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots
             oRisk = risk; oPnl = 0.0; oBE = False; oFill = t + 1; oTF = sTF[sd]; oKZ = kz; oL = sL[sd]
-            oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]
+            oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]; oMssP = sMss[sd]
             dayTrades += 1
             sA[sd] = 0; rej[18] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 18, d, sL[sd], sTF[sd])
             # fill bar: conservative SL check on the fill bar itself
@@ -360,8 +364,8 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 bal += pnl; oPnl += pnl; dayPL += pnl
                 L_t[nt] = t1[t + 1]; L_x[nt] = t1[t + 1]; L_d[nt] = od; L_tf[nt] = oTF; L_kz[nt] = oKZ
                 L_pnl[nt] = oPnl; L_R[nt] = -1.0; L_risk[nt] = risk; L_ent[nt] = oE; L_sl[nt] = sl; L_tp[nt] = oTP
-                L_lvl[nt] = oL; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
+                L_lvl[nt] = oL; L_tp1[nt] = oTP1; L_mss[nt] = oMssP; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
                 nt += 1; st = 0
 
     return (L_t[:nt], L_x[:nt], L_d[:nt], L_tf[:nt], L_R[:nt], L_pnl[:nt], L_kz[:nt], L_risk[:nt],
-            L_ent[:nt], L_sl[:nt], L_tp[:nt], L_lvl[:nt], L_sw[:nt], L_mi[:nt], L_zt[:nt], L_zb[:nt], rej, EV[:min(ne2, 60000)])
+            L_ent[:nt], L_sl[:nt], L_tp[:nt], L_lvl[:nt], L_sw[:nt], L_mi[:nt], L_zt[:nt], L_zb[:nt], rej, EV[:min(ne2, 60000)], L_tp1[:nt], L_mss[:nt])
