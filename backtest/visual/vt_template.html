@@ -1,0 +1,286 @@
+<title>ไม้เทรด ICT Top-down ทองคำ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: trading-desk replay — trade list rail on the left, chart + step log on the right; stacks on phones */
+:root {
+  --bg: #f2f4f6; --surface: #ffffff; --surface2: #f7f8fa; --fg: #181c21; --muted: #5d6671; --line: #dce1e6;
+  --gold: #9c7410; --gold-soft: rgba(156,116,16,.12); --up: #11806a; --down: #cf4537; --entry: #2b5fc4;
+  --win: #11806a; --loss: #cf4537; --be: #7a8591;
+  --font: "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111317; --surface: #181b20; --surface2: #1e2228; --fg: #e7e9ec; --muted: #98a1ab; --line: #2a3038;
+  --gold: #d8b13e; --gold-soft: rgba(216,177,62,.14); --up: #2db795; --down: #ef6b5e; --entry: #739ef0;
+  --win: #2db795; --loss: #ef6b5e; --be: #8b95a0; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #181b20; --surface2: #1e2228; --fg: #e7e9ec; --muted: #98a1ab; --line: #2a3038;
+  --gold: #d8b13e; --gold-soft: rgba(216,177,62,.14); --up: #2db795; --down: #ef6b5e; --entry: #739ef0;
+  --win: #2db795; --loss: #ef6b5e; --be: #8b95a0; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px }
+.wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px }
+h1 { font-size: 1.55rem; line-height: 1.2; margin: 0; font-weight: 700; text-wrap: balance }
+h1 .au { color: var(--gold) }
+.sub { color: var(--muted); font-size: .9rem; margin-top: 2px }
+.stats { display: flex; flex-wrap: wrap; gap: 8px }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; min-width: 88px }
+.stat b { display: block; font-family: var(--mono); font-size: 1.05rem; font-variant-numeric: tabular-nums }
+.stat span { color: var(--muted); font-size: .75rem; letter-spacing: .02em }
+.grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+aside { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; min-width: 0; overflow: hidden }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border-bottom: 1px solid var(--line) }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden }
+.seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .82rem; padding: 4px 10px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--gold-soft); color: var(--fg); font-weight: 600 }
+select { font: inherit; font-size: .82rem; color: var(--fg); background: var(--surface2); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px }
+.count { color: var(--muted); font-size: .78rem; padding: 6px 12px 0 }
+.list { list-style: none; margin: 0; padding: 6px; max-height: 640px; overflow-y: auto }
+@media (max-width: 860px) { .list { max-height: 230px } }
+.list li button { width: 100%; text-align: left; display: grid; grid-template-columns: 6px 1fr auto; gap: 10px; align-items: center;
+  border: 0; background: transparent; color: var(--fg); font: inherit; padding: 7px 8px; border-radius: 7px; cursor: pointer }
+.list li button:hover { background: var(--surface2) }
+.list li button[aria-current="true"] { background: var(--gold-soft) }
+.list li button:focus-visible, .seg button:focus-visible, .nav button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px }
+.stripe { width: 6px; height: 30px; border-radius: 3px }
+.li-main { min-width: 0 }
+.li-main .t { font-size: .85rem; font-weight: 600 }
+.li-main .m { font-size: .76rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.r { font-family: var(--mono); font-size: .85rem; font-variant-numeric: tabular-nums; font-weight: 600 }
+.pos { color: var(--win) } .neg { color: var(--loss) } .zero { color: var(--be) }
+section.viewer { display: flex; flex-direction: column; gap: 12px; min-width: 0 }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0 }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line) }
+.nav { display: flex; align-items: center; gap: 8px }
+.nav button { font: inherit; font-size: .85rem; border: 1px solid var(--line); background: var(--surface2); color: var(--fg); border-radius: 7px; padding: 4px 12px; cursor: pointer }
+.nav .pos-ind { font-family: var(--mono); font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums }
+.title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.pill { font-size: .78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor }
+.pill.buy { color: var(--up) } .pill.sell { color: var(--down) } .pill.zone { color: var(--gold) }
+.pill.res { color: #fff; border-color: transparent }
+.res.win { background: var(--win) } .res.loss { background: var(--loss) } .res.be { background: var(--be) }
+#chart { height: 460px; width: 100% }
+@media (max-width: 600px) { #chart { height: 340px } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 12px 10px; border-top: 1px solid var(--line); font-size: .78rem; color: var(--muted) }
+.legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px }
+.legend .dash { border-top-style: dashed } .legend .dot { border-top-style: dotted }
+.legend .box { width: 14px; height: 10px; border: 1px dashed; border-top: 1px dashed; background: transparent }
+.detail { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 12px }
+@media (max-width: 760px) { .detail { grid-template-columns: minmax(0, 1fr) } }
+.steps { padding: 12px 16px; margin: 0 }
+.steps h2, .nums h2 { font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; font-weight: 600 }
+.steps ol { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px }
+.steps li { font-size: .9rem }
+.steps li .tm { font-family: var(--mono); font-size: .78rem; color: var(--muted) }
+.steps li b { font-family: var(--mono); font-weight: 500 }
+.nums { padding: 12px 16px }
+.nums dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0 }
+.nums dt { color: var(--muted); font-size: .85rem }
+.nums dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; font-size: .9rem }
+.foot { color: var(--muted); font-size: .78rem; max-width: 75ch }
+kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; background: var(--surface2) }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>ไม้เทรด ICT Top-down <span class="au">ทองคำ</span></h1>
+      <div class="sub">XAUUSD · ย้อนดูทุกไม้ของ EA v1.20 จาก backtest ข้อมูล M1 · เวลาไทย</div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="grid">
+    <aside aria-label="รายการไม้">
+      <div class="filters">
+        <div class="seg" role="group" aria-label="ผลลัพธ์">
+          <button type="button" data-res="all" aria-pressed="true">ทั้งหมด</button>
+          <button type="button" data-res="win" aria-pressed="false">กำไร</button>
+          <button type="button" data-res="loss" aria-pressed="false">ขาดทุน</button>
+        </div>
+        <select id="fSide" aria-label="ฝั่ง"><option value="all">Buy + Sell</option><option value="Buy">Buy</option><option value="Sell">Sell</option></select>
+        <select id="fYear" aria-label="ปี"><option value="all">ทุกปี</option></select>
+      </div>
+      <div class="count" id="count"></div>
+      <ul class="list" id="list"></ul>
+    </aside>
+
+    <section class="viewer">
+      <div class="card">
+        <div class="toolbar">
+          <div class="title-row" id="titleRow"></div>
+          <div class="nav">
+            <button type="button" id="prev" aria-label="ไม้ก่อนหน้า">‹ ก่อนหน้า</button>
+            <span class="pos-ind" id="posInd"></span>
+            <button type="button" id="next" aria-label="ไม้ถัดไป">ถัดไป ›</button>
+          </div>
+        </div>
+        <div id="chart" role="img" aria-label="กราฟแท่งเทียนของไม้ที่เลือก"></div>
+        <div class="legend">
+          <span><i class="dash" style="border-color:var(--gold)"></i>โซน TF ใหญ่ที่ถูกกวาด</span>
+          <span><i style="border-color:var(--muted)"></i>ระดับ MSS</span>
+          <span><i class="box dash" style="border-color:var(--entry)"></i>FVG</span>
+          <span><i style="border-color:var(--entry)"></i>Entry</span>
+          <span><i style="border-color:var(--loss)"></i>SL</span>
+          <span><i class="dot" style="border-color:var(--win)"></i>TP1</span>
+          <span><i style="border-color:var(--win)"></i>TP2</span>
+          <span id="tfNote"></span>
+        </div>
+      </div>
+
+      <div class="detail">
+        <div class="card steps"><h2>ลำดับเหตุการณ์</h2><ol id="steps"></ol></div>
+        <div class="card nums"><h2>ตัวเลขของไม้นี้</h2><dl id="nums"></dl></div>
+      </div>
+      <p class="foot">ใช้ปุ่ม <kbd>←</kbd> <kbd>→</kbd> เลื่อนไม้ได้ · ผลจาก backtest ข้อมูล HistData (ราคา Bid, spread สมมติ $0.30, เสี่ยง 1% ต่อไม้) ไม่ใช่ผลเทรดจริง · ราคาโบรกของคุณอาจต่างเล็กน้อย</p>
+    </section>
+  </div>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const T = D.trades, S = D.summary;
+  const $ = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const fmtR = (r) => (r > 0 ? '+' : '') + r.toFixed(2) + 'R';
+  const cls = (t) => t.exit === 'SL' ? 'loss' : (t.R > 0.05 ? 'win' : 'be');
+  const exitText = { SL: 'โดน SL', TP: 'ถึง TP', TP2: 'TP1 + TP2', BE: 'TP1 แล้วกันทุน' };
+
+  // header stats
+  $('stats').innerHTML = [
+    [S.n, 'ไม้ (' + S.first + '–' + S.last + ')'], [S.win + '%', 'ชนะ'], [(S.avgR > 0 ? '+' : '') + S.avgR.toFixed(2) + 'R', 'เฉลี่ยต่อไม้'],
+    [(S.ret > 0 ? '+' : '') + S.ret + '%', 'ผลรวม'], [S.dd + '%', 'Max DD']
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+
+  // filters
+  const years = [...new Set(T.map(t => t.tEntry.slice(0, 4)))].sort();
+  $('fYear').insertAdjacentHTML('beforeend', years.map(y => `<option value="${y}">${y}</option>`).join(''));
+  let fRes = 'all', view = T.slice(), cur = 0;
+  function applyFilters(keepId) {
+    const side = $('fSide').value, yr = $('fYear').value;
+    view = T.filter(t => (fRes === 'all' || (fRes === 'win' ? t.R > 0.05 : t.R <= 0.05)) &&
+                        (side === 'all' || t.dir === side) && (yr === 'all' || t.tEntry.startsWith(yr)));
+    $('count').textContent = `แสดง ${view.length} จาก ${T.length} ไม้`;
+    $('list').innerHTML = view.map((t, i) => `<li><button type="button" data-i="${i}">
+        <span class="stripe" style="background:var(--${cls(t)})"></span>
+        <span class="li-main"><span class="t">#${t.id} · ${t.tEntry.slice(0, 10)}</span>
+        <span class="m">${t.dir} · โซน ${t.zone} · ${t.kz} · ${exitText[t.exit]}</span></span>
+        <span class="r ${t.R > 0.05 ? 'pos' : (t.R < -0.05 ? 'neg' : 'zero')}">${fmtR(t.R)}</span></button></li>`).join('');
+    let idx = keepId ? view.findIndex(t => t.id === keepId) : 0;
+    show(idx < 0 ? 0 : idx);
+  }
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    fRes = b.dataset.res; applyFilters();
+  }));
+  $('fSide').addEventListener('change', () => applyFilters());
+  $('fYear').addEventListener('change', () => applyFilters());
+  $('list').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (b) show(+b.dataset.i); });
+  $('prev').addEventListener('click', () => show(cur - 1));
+  $('next').addEventListener('click', () => show(cur + 1));
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('select, input')) return;
+    if (e.key === 'ArrowLeft') show(cur - 1); else if (e.key === 'ArrowRight') show(cur + 1);
+  });
+
+  // chart
+  let chart = null;
+  function draw(t) {
+    const el = $('chart');
+    if (chart) { chart.remove(); chart = null; }
+    if (!window.LightweightCharts) { el.textContent = 'โหลดไลบรารีกราฟไม่สำเร็จ'; return; }
+    const C = { bg: css('--surface'), fg: css('--muted'), line: css('--line'), up: css('--up'), down: css('--down'),
+                gold: css('--gold'), entry: css('--entry'), win: css('--win'), loss: css('--loss'), muted: css('--muted') };
+    chart = LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: { background: { type: 'solid', color: C.bg }, textColor: C.fg, fontFamily: css('--mono') },
+      grid: { vertLines: { color: C.line }, horzLines: { color: C.line } },
+      rightPriceScale: { borderColor: C.line }, timeScale: { borderColor: C.line, timeVisible: true, secondsVisible: false },
+      crosshair: { mode: 0 }, localization: { priceFormatter: p => p.toFixed(2) }
+    });
+    const cs = chart.addCandlestickSeries({ upColor: C.up, downColor: C.down, borderVisible: false, wickUpColor: C.up, wickDownColor: C.down,
+      priceLineVisible: false, lastValueVisible: false });
+    cs.setData(t.bars.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4] })));
+    const pl = (price, color, style, title, w) => cs.createPriceLine({ price, color, lineWidth: w || 1, lineStyle: style, axisLabelVisible: true, title });
+    pl(t.lvl, C.gold, 2, 'โซน ' + t.zone, 2);
+    pl(t.sl, C.loss, 0, 'SL');
+    pl(t.entry, C.entry, 0, 'Entry');
+    if (t.tp2 !== t.tp1) { pl(t.tp1, C.win, 1, 'TP1'); pl(t.tp2, C.win, 0, 'TP2', 2); } else pl(t.tp1, C.win, 0, 'TP', 2);
+    const seg = (a, b, v, color, style) => {
+      if (a == null || b == null) return;
+      const s = chart.addLineSeries({ color, lineWidth: 1, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      const lo = Math.min(a, b), hi = Math.max(a, b);
+      s.setData(t.bars.filter(x => x[0] >= lo && x[0] <= hi).map(x => ({ time: x[0], value: v })));
+    };
+    const m = t.mk;
+    seg(m.mssA, m.mss, t.mss, C.muted, 0);                        // MSS level
+    seg(m.fvg, m.exit, t.zt, C.entry, 2); seg(m.fvg, m.exit, t.zb, C.entry, 2);   // FVG box edges
+    const buy = t.dir === 'Buy';
+    const mk = [
+      { time: m.sweep, position: buy ? 'belowBar' : 'aboveBar', color: C.gold, shape: buy ? 'arrowUp' : 'arrowDown', text: 'Sweep' },
+      { time: m.mss, position: buy ? 'aboveBar' : 'belowBar', color: C.muted, shape: 'circle', text: 'MSS' },
+      { time: m.entry, position: buy ? 'belowBar' : 'aboveBar', color: C.entry, shape: buy ? 'arrowUp' : 'arrowDown', text: 'PA → เข้า' },
+    ];
+    if (m.tp1 != null && t.exit !== 'TP') mk.push({ time: m.tp1, position: buy ? 'aboveBar' : 'belowBar', color: C.win, shape: 'square', text: 'TP1' });
+    const lossSide = (t.exit === 'SL') === buy;   // SL exits sit below the bar for a Buy, above for a Sell
+    mk.push({ time: m.exit, position: lossSide ? 'belowBar' : 'aboveBar', color: t.exit === 'SL' ? C.loss : C.win, shape: 'square', text: exitText[t.exit] });
+    mk.sort((a, b) => a.time - b.time);
+    cs.setMarkers(mk);
+    chart.timeScale().fitContent();
+  }
+
+  function show(i) {
+    if (!view.length) { $('titleRow').textContent = 'ไม่มีไม้ตามตัวกรองนี้'; if (chart) { chart.remove(); chart = null; } $('steps').innerHTML = ''; $('nums').innerHTML = ''; $('posInd').textContent = '0/0'; return; }
+    cur = Math.max(0, Math.min(view.length - 1, i));
+    const t = view[cur], buy = t.dir === 'Buy', c = cls(t);
+    document.querySelectorAll('#list button').forEach((b, k) => {
+      const on = k === cur; b.setAttribute('aria-current', on ? 'true' : 'false');
+      if (on) b.scrollIntoView({ block: 'nearest' });
+    });
+    $('posInd').textContent = `${cur + 1}/${view.length}`;
+    $('prev').disabled = cur === 0; $('next').disabled = cur === view.length - 1;
+    $('titleRow').innerHTML = `<strong>#${t.id}</strong>
+      <span class="pill ${buy ? 'buy' : 'sell'}">${t.dir}</span><span class="pill zone">โซน ${t.zone}</span>
+      <span class="pill res ${c}">${exitText[t.exit]} ${fmtR(t.R)}</span>`;
+    $('tfNote').textContent = `แท่งที่แสดง: M${t.tf}`;
+    const dn = buy ? 'ลง' : 'ขึ้น', over = buy ? 'เหนือ' : 'ใต้';
+    $('steps').innerHTML = [
+      `<span class="tm">${t.tSweep}</span> ราคาแทง${dn}ผ่านโซน ${t.zone} ที่ <b>${t.lvl.toFixed(2)}</b> ไปถึง <b>${t.ext.toFixed(2)}</b> แล้วปิดกลับ = กวาด liquidity`,
+      `<span class="tm">${t.tMss}</span> แท่ง displacement ปิด${over} swing M1 ที่ <b>${t.mss.toFixed(2)}</b> = MSS`,
+      `เกิด FVG บน M1 ช่วง <b>${t.zb.toFixed(2)}–${t.zt.toFixed(2)}</b>`,
+      `<span class="tm">${t.tEntry}</span> ราคาย่อเข้า FVG + แท่งปฏิเสธ → เข้า ${t.dir} ที่ <b>${t.entry.toFixed(2)}</b> (Kill Zone ${t.kz}, NY ${t.nyEntry})`,
+      `SL <b>${t.sl.toFixed(2)}</b> พ้นโซน 1.5 ATR · TP1 <b>${t.tp1.toFixed(2)}</b> = swing ก่อนกลับตัว` + (t.tp2 !== t.tp1 ? ` · TP2 <b>${t.tp2.toFixed(2)}</b> = ขอบ dealing range` : ''),
+      `<span class="tm">${t.tExit}</span> ${exitText[t.exit]} ที่ <b>${t.xpx.toFixed(2)}</b> → <span class="${t.R > 0.05 ? 'pos' : (t.R < -0.05 ? 'neg' : 'zero')}">${fmtR(t.R)} (${t.pnl > 0 ? '+' : ''}$${t.pnl.toFixed(0)})</span>`
+    ].map(s => `<li>${s}</li>`).join('');
+    const rows = [['Entry', t.entry.toFixed(2)], ['Stop Loss', t.sl.toFixed(2)], ['ระยะ SL', '$' + t.risk.toFixed(2) + ' /oz'],
+      ['TP1', t.tp1.toFixed(2) + `  (${t.rr1.toFixed(2)}R)`]];
+    if (t.tp2 !== t.tp1) rows.push(['TP2', t.tp2.toFixed(2) + `  (${t.rr2.toFixed(2)}R)`]);
+    rows.push(['ราคาออก', t.xpx.toFixed(2)], ['ผล', fmtR(t.R)], ['กำไร/ขาดทุน', (t.pnl > 0 ? '+$' : '−$') + Math.abs(t.pnl).toFixed(2)]);
+    $('nums').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+    draw(t);
+    try { history.replaceState(null, '', '#trade-' + t.id); } catch (e) {}
+  }
+
+  // re-theme the chart when the viewer's theme changes
+  const redraw = () => { if (view.length) draw(view[cur]); };
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw); } catch (e) {}
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  const h = (location.hash.match(/^#trade-(\d+)$/) || [])[1];
+  applyFilters(h ? +h : null);
+  window.addEventListener('hashchange', () => {
+    const k = (location.hash.match(/^#trade-(\d+)$/) || [])[1];
+    if (k) { const i = view.findIndex(t => t.id === +k); if (i >= 0 && i !== cur) show(i); }
+  });
+})();
+</script>
