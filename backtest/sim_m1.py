@@ -31,7 +31,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     cA = np.zeros(2, np.int64); cExt = np.zeros(2); cL = np.zeros(2); cTF = np.zeros(2, np.int64); cF = np.zeros(2, np.int64)
     cEI = np.zeros(2, np.int64); cLeg = np.zeros(2); cPL = np.zeros(2); cAge = np.zeros(2, np.int64); cPh = np.zeros(2, np.int64)
     cBI = np.zeros(2, np.int64); cMA = np.zeros(2, np.int64); cZT = np.zeros(2); cZB = np.zeros(2); cZA = np.zeros(2, np.int64)
-    cSw = np.zeros(2, np.int64)
+    cSw = np.zeros(2, np.int64); cHi = np.zeros(2)
     L_sw = np.zeros(MAXT, np.int64); L_mi = np.zeros(MAXT, np.int64); L_zt = np.zeros(MAXT); L_zb = np.zeros(MAXT)
     nt = 0
     # active HTF levels: side 0 = lows (sell-side liquidity), 1 = highs
@@ -392,11 +392,13 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                         body = d * (c[jj] - o[jj]); rng = h[jj] - l[jj]
                         if rng > 0 and body >= cfg[10] * a1 and body / rng >= 0.5: dsp = True; break
                     if brk and dsp:
-                        cPh[sd] = 1; cBI[sd] = t; cMA[sd] = 0
+                        cPh[sd] = 1; cBI[sd] = t; cMA[sd] = 0; cHi[sd] = h[t] if d > 0 else l[t]
                     elif (d > 0 and h[t] > cLeg[sd]) or (d < 0 and l[t] < cLeg[sd]):
                         cLeg[sd] = h[t] if d > 0 else l[t]          # new extreme without a clean BOS -> raise the bar
                         cPL[sd] = l[t] if d > 0 else h[t]
                     continue
+                if cPh[sd] >= 1:
+                    cHi[sd] = max(cHi[sd], h[t]) if d > 0 else min(cHi[sd], l[t])     # extreme of the BOS leg
                 if cPh[sd] == 1:
                     cMA[sd] += 1
                     if cMA[sd] > cfg[12]: cA[sd] = 0; continue
@@ -436,7 +438,9 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 entry = o[t + 1] + (spread if d > 0 else 0.0)
                 az = aH1[t] if cTF[sd] == 1 else aH4[t]
                 if cfg[54] == 0: sl = cL[sd] - d * cfg[27] * az            # same structural SL as the reversal
-                else: sl = cPL[sd] - d * cfg[55] * az                     # below the pullback (higher low)
+                elif cfg[54] == 1: sl = cPL[sd] - d * cfg[55] * az        # below the pullback (higher low), zone ATR
+                elif cfg[54] == 2: sl = cPL[sd] - d * cfg[55] * a1        # tight: below the pullback, M1 ATR
+                else: sl = (cZB[sd] if d > 0 else cZT[sd]) - d * cfg[55] * a1   # tight: beyond the FVG, M1 ATR
                 risk = d * (entry - sl)
                 if risk <= 0: cA[sd] = 0; continue
                 if cfg[51] > 0 and risk > cfg[51] * az: cA[sd] = 0; continue
@@ -455,7 +459,12 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                     ex = max(ex, h[jj]) if d > 0 else min(ex, l[jj] + spread)
                 tp1 = tsw if (tsw != 0.0 and d * (tsw - entry) / risk >= cfg[31]) else ex
                 tp = ex if d * (ex - tp1) > 0 else tp1
-                if d * (tp1 - entry) / risk < cfg[31]: cA[sd] = 0; continue
+                if cfg[56] == 1:                                           # tight: fixed RR, single target
+                    tp1 = entry + d * cfg[57] * risk; tp = tp1
+                elif cfg[56] == 2:                                         # tight: the BOS-leg extreme (nearest liquidity)
+                    tp1 = cHi[sd] if d > 0 else cHi[sd] + spread; tp = tp1
+                    if d * (tp1 - entry) / risk < cfg[58]: cA[sd] = 0; continue
+                if cfg[56] == 0 and d * (tp1 - entry) / risk < cfg[31]: cA[sd] = 0; continue
                 lots = np.floor(bal * cfg[0] / 100.0 / (risk * contract) / 0.01 + 1e-9) * 0.01
                 if lots < 0.01: cA[sd] = 0; continue
                 oTP1 = tp1; oT1 = not (d * (tp - tp1) > 0)
