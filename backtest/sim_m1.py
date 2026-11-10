@@ -5,6 +5,13 @@ import numpy as np, numba as nb
 from sim import swing_hi, swing_lo, candle, htf_trend
 
 
+
+@nb.njit(cache=True)
+def logev(E, ne, t_sweep, t_end, code, d, lvl, tf):
+    if ne < E.shape[0]:
+        E[ne, 0] = t_sweep; E[ne, 1] = t_end; E[ne, 2] = code; E[ne, 3] = d; E[ne, 4] = lvl; E[ne, 5] = tf
+    return ne + 1
+
 @nb.njit(cache=True)
 def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
            H1h, H1l, H4h, H4l, b1, b4, cfg, Pc, aH1, aH4, H1st, H4st, prevDS, h1gid, h4gid,
@@ -33,6 +40,8 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     sAge = np.zeros(2, np.int64); sPh = np.zeros(2, np.int64); sMss = np.zeros(2); sMA = np.zeros(2, np.int64)
     sZT = np.zeros(2); sZB = np.zeros(2); sZA = np.zeros(2, np.int64); sCand = np.zeros(2, np.int64); sSw = np.zeros(2, np.int64)
     sMI = np.zeros(2, np.int64)
+    rej = np.zeros(30, np.int64); sBlk = np.zeros(2, np.int64)
+    EV = np.zeros((60000, 6)); ne2 = 0
     # position
     st = 0; od = 0; oE = 0.0; oSL = 0.0; oTP = 0.0; oLots = 0.0; oLots0 = 0.0; oRisk = 0.0; oPnl = 0.0; oBE = False
     oFill = 0; oTF = 0; oKZ = 0; oL = 0.0; oSw = 0; oMI = 0; oZT = 0.0; oZB = 0.0
@@ -154,6 +163,9 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                     nl[sd] -= 1
                 else:
                     q += 1
+            if fnd: rej[0] += 1
+            if fnd and sA[sd] == 1:
+                rej[1] += 1; ne2 = logev(EV, ne2, t1[t], t1[t], 1, 1 if sd == 0 else -1, best, bt)
             if not fnd or sA[sd] == 1:
                 continue
             bm = int(cfg[17])
@@ -164,7 +176,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             if cfg[42] > 0 and bt == 1 and bq == 0: continue          # H1 zone must be equal highs/lows
             if cfg[47] == 1 and dBias[t] != d: continue               # daily bias strict
             if cfg[47] == 2 and dBias[t] == -d: continue              # daily bias loose
-            sFE[sd] = be
+            sFE[sd] = be; sBlk[sd] = 0
             sA[sd] = 1; sF[sd] = bf; sL[sd] = best; sTF[sd] = bt; sExt[sd] = l[t] if d > 0 else h[t]; sEI[sd] = t
             sAge[sd] = -1; sPh[sd] = 0; sMss[sd] = 0.0; sCand[sd] = 0; sSw[sd] = t
 
@@ -179,11 +191,11 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             sLg[sd] = max(sLg[sd], h[t]) if d > 0 else min(sLg[sd], l[t])
             if sPh[sd] == 0:
                 if sAge[sd] > cfg[8]:
-                    sA[sd] = 0; continue
+                    sA[sd] = 0; rej[3] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 3, d, sL[sd], sTF[sd]); continue
                 if (d > 0 and l[t] < sExt[sd]) or (d < 0 and h[t] > sExt[sd]):
                     sExt[sd] = l[t] if d > 0 else h[t]; sEI[sd] = t; sMss[sd] = 0.0
                 if d * (sL[sd] - sExt[sd]) > cfg[3] * a5:
-                    sA[sd] = 0; continue                   # too deep = real breakout, not a sweep
+                    sA[sd] = 0; rej[4] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 4, d, sL[sd], sTF[sd]); continue                   # too deep = real breakout, not a sweep
                 if candle(o, h, l, c, t, d, Pc) and (cfg[25] <= 0 or t - sEI[sd] <= cfg[25]):
                     sCand[sd] = 1
                 if sMss[sd] == 0.0:
@@ -209,21 +221,21 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                         disp = True; break
                 if not disp and cfg[14] != 2: continue
                 if cfg[25] > 0 and sCand[sd] == 0 and cfg[14] != 2:
-                    sA[sd] = 0; continue
+                    sA[sd] = 0; rej[5] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 5, d, sL[sd], sTF[sd]); continue
                 sPh[sd] = 1; sMA[sd] = 0; sMI[sd] = t
                 if cfg[14] == 0: continue
             elif sPh[sd] == 1:
                 sMA[sd] += 1
                 if sMA[sd] > cfg[12]:
-                    sA[sd] = 0; continue
+                    sA[sd] = 0; rej[6] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 6, d, sL[sd], sTF[sd]); continue
                 if (d > 0 and l[t] < sExt[sd]) or (d < 0 and h[t] > sExt[sd]):
-                    sA[sd] = 0; continue
+                    sA[sd] = 0; rej[7] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 7, d, sL[sd], sTF[sd]); continue
             elif sPh[sd] == 2:
                 sZA[sd] += 1
                 if sZA[sd] > cfg[13]:
-                    sA[sd] = 0; continue
+                    cdx = sBlk[sd] if sBlk[sd] > 0 else 8; rej[cdx] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], cdx, d, sL[sd], sTF[sd]); sA[sd] = 0; continue
                 if (d > 0 and (c[t] < sZB[sd] or l[t] < sExt[sd])) or (d < 0 and (c[t] > sZT[sd] or h[t] > sExt[sd])):
-                    sA[sd] = 0; continue
+                    sA[sd] = 0; rej[9] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 9, d, sL[sd], sTF[sd]); continue
                 touched = l[t] <= sZT[sd] if d > 0 else h[t] >= sZB[sd]
                 if not (touched and candle(o, h, l, c, t, d, Pc)): continue
 
@@ -255,10 +267,11 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             if cfg[18] > 0 and hr >= cfg[35] and hr < cfg[36]: kz = 1
             if cfg[19] > 0 and hr >= cfg[37] and hr < cfg[38]: kz = 2
             if cfg[18] == 0 and cfg[19] == 0: kz = 3
-            if kz == 0 or st != 0: continue
+            if kz == 0: sBlk[sd] = 10; continue
+            if st != 0: sBlk[sd] = 11; continue
             dow = ((now - 420) // 1440 + 3) % 7          # NY weekday, Monday = 0
-            if dow < 5 and ((int(cfg[39]) >> dow) & 1) == 0: sA[sd] = 0; continue
-            if cfg[4] > 0 and dayTrades >= cfg[4]: continue
+            if dow < 5 and ((int(cfg[39]) >> dow) & 1) == 0: sA[sd] = 0; rej[13] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 13, d, sL[sd], sTF[sd]); continue
+            if cfg[4] > 0 and dayTrades >= cfg[4]: sBlk[sd] = 12; continue
             entry = o[t + 1] + (spread if d > 0 else 0.0)
             if cfg[46] > 0 and mOpen[t + 1] > 0:                       # Power of 3: buy below / sell above NY midnight open
                 if (d > 0 and entry > mOpen[t + 1]) or (d < 0 and entry < mOpen[t + 1]): sA[sd] = 0; continue
@@ -298,7 +311,8 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             if cfg[29] > 0:
                 # filters judged on the M1-structure SL (selects the same setups), SL actually placed beyond the zone
                 r1 = d * (entry - (sExt[sd] - d * cfg[2] * a1))
-                if r1 <= 0 or r1 > cfg[24] * a5 or spread / r1 > cfg[23]: sA[sd] = 0; continue
+                if r1 <= 0 or r1 > cfg[24] * a5: sA[sd] = 0; rej[14] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 14, d, sL[sd], sTF[sd]); continue
+                if spread / r1 > cfg[23]: sA[sd] = 0; rej[15] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 15, d, sL[sd], sTF[sd]); continue
             elif cfg[26] == 1:
                 if risk > cfg[28] * (aH1[t] if sTF[sd] == 1 else aH4[t]): sA[sd] = 0; continue
             elif risk > cfg[24] * a5: sA[sd] = 0; continue
@@ -310,7 +324,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 for jj in range(max(sF[sd], 0), sEI[sd] + 1):
                     ex = max(ex, h[jj]) if d > 0 else min(ex, l[jj] + spread)
                 tp = ex - d * cfg[32]
-                if d * (tp - entry) / risk < cfg[31]: sA[sd] = 0; continue
+                if d * (tp - entry) / risk < cfg[31]: sA[sd] = 0; rej[16] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 16, d, sL[sd], sTF[sd]); continue
             elif cfg[30] == 2:
                 # ICT target: the last swing (zone TF; PDH/PDL use H1) BEFORE the reversal = origin of the leg into the sweep
                 use4 = sTF[sd] == 2
@@ -323,9 +337,9 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                         tp = HH[k]; break
                     if d < 0 and swing_lo(LL, k, ts, gS) and LL[k] + spread < entry:
                         tp = LL[k] + spread; break
-                if tp == 0.0: sA[sd] = 0; continue
+                if tp == 0.0: sA[sd] = 0; rej[16] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 16, d, sL[sd], sTF[sd]); continue
                 tp = tp - d * cfg[32]
-                if d * (tp - entry) / risk < cfg[31]: sA[sd] = 0; continue
+                if d * (tp - entry) / risk < cfg[31]: sA[sd] = 0; rej[16] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 16, d, sL[sd], sTF[sd]); continue
             tp1 = tp
             if cfg[48] > 0:                                             # TP1 = swing, TP2 = dealing-range edge
                 ex = -1e18 if d > 0 else 1e18
@@ -333,13 +347,13 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                     ex = max(ex, h[jj]) if d > 0 else min(ex, l[jj] + spread)
                 if d * (ex - tp1) > 0: tp = ex
             lots = np.floor(bal * cfg[0] / 100.0 / (risk * contract) / 0.01 + 1e-9) * 0.01
-            if lots < 0.01: sA[sd] = 0; continue
+            if lots < 0.01: sA[sd] = 0; rej[17] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 17, d, sL[sd], sTF[sd]); continue
             oTP1 = tp1; oT1 = not (cfg[48] > 0 and d * (tp - tp1) > 0)
             st = 2; od = d; oE = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots
             oRisk = risk; oPnl = 0.0; oBE = False; oFill = t + 1; oTF = sTF[sd]; oKZ = kz; oL = sL[sd]
             oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]
             dayTrades += 1
-            sA[sd] = 0
+            sA[sd] = 0; rej[18] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 18, d, sL[sd], sTF[sd])
             # fill bar: conservative SL check on the fill bar itself
             if (d > 0 and l[t + 1] <= sl) or (d < 0 and h[t + 1] + spread >= sl):
                 pnl = -risk * contract * lots
@@ -350,4 +364,4 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 nt += 1; st = 0
 
     return (L_t[:nt], L_x[:nt], L_d[:nt], L_tf[:nt], L_R[:nt], L_pnl[:nt], L_kz[:nt], L_risk[:nt],
-            L_ent[:nt], L_sl[:nt], L_tp[:nt], L_lvl[:nt], L_sw[:nt], L_mi[:nt], L_zt[:nt], L_zb[:nt])
+            L_ent[:nt], L_sl[:nt], L_tp[:nt], L_lvl[:nt], L_sw[:nt], L_mi[:nt], L_zt[:nt], L_zb[:nt], rej, EV[:min(ne2, 60000)])

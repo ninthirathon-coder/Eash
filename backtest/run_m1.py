@@ -98,7 +98,8 @@ def go(**kw):
                H1['h'], H1['l'], H4['h'], H4['l'], b1, b4, cfg, Pc, aH1, aH4, H1['st'], H4['st'], prevDS, H1['gid'], H4['gid'],
                H1['en'], H4['en'], prevDE, wStart, pwh, pwl, prevWS, prevWE, mOpen, dBias, agL, agH)
     cols = ['tin', 'tout', 'dir', 'tf', 'R', 'pnl', 'kz', 'risk', 'entry', 'sl', 'tp', 'lvl', 'sw', 'mi', 'zt', 'zb']
-    T = pd.DataFrame({k: v for k, v in zip(cols, r)})
+    T = pd.DataFrame({k: v for k, v in zip(cols, r[:16])})
+    T.attrs['rej'] = r[16]; T.attrs['ev'] = r[17]
     T['date'] = pd.to_datetime(T.tin * 60, unit='s')
     return T
 
