@@ -7,7 +7,7 @@ from sim import swing_hi, swing_lo, candle, htf_trend
 
 @nb.njit(cache=True)
 def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
-           H1h, H1l, H4h, H4l, b1, b4, cfg, Pc, aH1, aH4):
+           H1h, H1l, H4h, H4l, b1, b4, cfg, Pc, aH1, aH4, H1st, H4st, prevDS, h1gid, h4gid):
     # cfg: 0 risk%,1 RR,2 slBufATR1,3 maxDepthATR5,4 maxTrades/day,5 BE_R,6 BEplus,7 partial%,8 setupExp(M1 bars),
     # 9 mssS,10 dispATR1,11 minFVGATR1,12 fvgWait,13 paWait,14 entryMode(0 FVG+PA, 1 market at MSS),
     # 15 spread,16 startBal,17 biasMode(0 none,1 H1,2 H4,3 both),18 lon,19 ny,20 useH1,21 useH4,22 usePD,
@@ -23,6 +23,8 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     # active HTF levels: side 0 = lows (sell-side liquidity), 1 = highs
     CAP = 64
     lvP = np.zeros((2, CAP)); lvT = np.zeros((2, CAP), np.int64); nl = np.zeros(2, np.int64)
+    lvF = np.zeros((2, CAP), np.int64)   # M1 index where the level was formed
+    sF = np.zeros(2, np.int64)
     # setups
     sA = np.zeros(2, np.int64); sL = np.zeros(2); sTF = np.zeros(2, np.int64); sExt = np.zeros(2); sEI = np.zeros(2, np.int64)
     sAge = np.zeros(2, np.int64); sPh = np.zeros(2, np.int64); sMss = np.zeros(2); sMA = np.zeros(2, np.int64)
@@ -78,9 +80,9 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
         if cfg[22] > 0 and dayStart[t + 1] == t + 1 and pdh[t + 1] > 0:
             for sd in range(2):
                 if nl[sd] == CAP:
-                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]
+                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]; lvF[sd, q] = lvF[sd, q + 1]
                     nl[sd] -= 1
-                lvP[sd, nl[sd]] = pdl[t + 1] if sd == 0 else pdh[t + 1]; lvT[sd, nl[sd]] = 3; nl[sd] += 1
+                lvP[sd, nl[sd]] = pdl[t + 1] if sd == 0 else pdh[t + 1]; lvT[sd, nl[sd]] = 3; lvF[sd, nl[sd]] = prevDS[t + 1]; nl[sd] += 1
         for tf in range(2):
             use = cfg[20] if tf == 0 else cfg[21]
             g = h1c_at[t] if tf == 0 else h4c_at[t]
@@ -96,22 +98,22 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 # still untouched by the current M1 bar?
                 if (sd == 0 and l[t] < P) or (sd == 1 and h[t] > P): continue
                 if nl[sd] == CAP:
-                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]
+                    for q in range(CAP - 1): lvP[sd, q] = lvP[sd, q + 1]; lvT[sd, q] = lvT[sd, q + 1]; lvF[sd, q] = lvF[sd, q + 1]
                     nl[sd] -= 1
-                lvP[sd, nl[sd]] = P; lvT[sd, nl[sd]] = 1 + tf; nl[sd] += 1
+                lvP[sd, nl[sd]] = P; lvT[sd, nl[sd]] = 1 + tf; lvF[sd, nl[sd]] = H1st[k] if tf == 0 else H4st[k]; nl[sd] += 1
 
         # ---------------- zones taken this bar -> new setups ----------------
         for sd in range(2):
             d = 1 if sd == 0 else -1          # lows swept -> buy setup
-            best = 0.0; bt = 0; fnd = False
+            best = 0.0; bt = 0; fnd = False; bf = 0
             q = 0
             while q < nl[sd]:
                 P = lvP[sd, q]
                 if (sd == 0 and l[t] < P) or (sd == 1 and h[t] > P):
                     if (not fnd) or (d > 0 and P < best) or (d < 0 and P > best) or (P == best and lvT[sd, q] > bt):
-                        best = P; bt = lvT[sd, q]; fnd = True
+                        best = P; bt = lvT[sd, q]; fnd = True; bf = lvF[sd, q]
                     for r in range(q, nl[sd] - 1):
-                        lvP[sd, r] = lvP[sd, r + 1]; lvT[sd, r] = lvT[sd, r + 1]
+                        lvP[sd, r] = lvP[sd, r + 1]; lvT[sd, r] = lvT[sd, r + 1]; lvF[sd, r] = lvF[sd, r + 1]
                     nl[sd] -= 1
                 else:
                     q += 1
@@ -122,7 +124,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 if b1[t] != d: continue
             if bm == 2 or bm == 3:
                 if b4[t] != d: continue
-            sA[sd] = 1; sL[sd] = best; sTF[sd] = bt; sExt[sd] = l[t] if d > 0 else h[t]; sEI[sd] = t
+            sA[sd] = 1; sF[sd] = bf; sL[sd] = best; sTF[sd] = bt; sExt[sd] = l[t] if d > 0 else h[t]; sEI[sd] = t
             sAge[sd] = -1; sPh[sd] = 0; sMss[sd] = 0.0; sCand[sd] = 0; sSw[sd] = t
 
         # ---------------- progress setups on M1 ----------------
@@ -226,9 +228,32 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 if risk > cfg[28] * (aH1[t] if sTF[sd] == 1 else aH4[t]): sA[sd] = 0; continue
             elif risk > cfg[24] * a5: sA[sd] = 0; continue
             if cfg[29] == 0 and spread / risk > cfg[23]: sA[sd] = 0; continue
+            tp = entry + d * cfg[1] * risk
+            if cfg[30] == 1:
+                # ICT target: opposite edge of the dealing range = extreme between level formation and the sweep
+                ex = -1e18 if d > 0 else 1e18
+                for jj in range(max(sF[sd], 0), sEI[sd] + 1):
+                    ex = max(ex, h[jj]) if d > 0 else min(ex, l[jj] + spread)
+                tp = ex - d * cfg[32]
+                if d * (tp - entry) / risk < cfg[31]: sA[sd] = 0; continue
+            elif cfg[30] == 2:
+                # ICT target: the last swing (zone TF; PDH/PDL use H1) BEFORE the reversal = origin of the leg into the sweep
+                use4 = sTF[sd] == 2
+                HH = H4h if use4 else H1h
+                LL = H4l if use4 else H1l
+                gS = h4gid[sEI[sd]] if use4 else h1gid[sEI[sd]]     # HTF bar holding the sweep extreme
+                ts = int(cfg[33]); tp = 0.0
+                for k in range(gS - 1, max(gS - 300, ts) - 1, -1):
+                    if d > 0 and swing_hi(HH, k, ts, gS) and HH[k] > entry:
+                        tp = HH[k]; break
+                    if d < 0 and swing_lo(LL, k, ts, gS) and LL[k] + spread < entry:
+                        tp = LL[k] + spread; break
+                if tp == 0.0: sA[sd] = 0; continue
+                tp = tp - d * cfg[32]
+                if d * (tp - entry) / risk < cfg[31]: sA[sd] = 0; continue
             lots = np.floor(bal * cfg[0] / 100.0 / (risk * contract) / 0.01 + 1e-9) * 0.01
             if lots < 0.01: sA[sd] = 0; continue
-            st = 2; od = d; oE = entry; oSL = sl; oTP = entry + d * cfg[1] * risk; oLots = lots; oLots0 = lots
+            st = 2; od = d; oE = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots
             oRisk = risk; oPnl = 0.0; oBE = False; oFill = t + 1; oTF = sTF[sd]; oKZ = kz; oL = sL[sd]
             oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]
             dayTrades += 1

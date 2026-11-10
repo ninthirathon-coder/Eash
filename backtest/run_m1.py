@@ -50,16 +50,17 @@ def last_closed_atr(G):
 aH1 = last_closed_atr(H1); aH4 = last_closed_atr(H4)
 DY = agg(1440)
 dayStart = DY['st'][DY['gid']]
+prevDS = np.where(DY['gid'] > 0, DY['st'][np.clip(DY['gid'] - 1, 0, None)], 0)
 pdh = np.where(DY['gid'] > 0, DY['h'][np.clip(DY['gid'] - 1, 0, None)], 0.0)
 pdl = np.where(DY['gid'] > 0, DY['l'][np.clip(DY['gid'] - 1, 0, None)], 0.0)
 
 BASE = dict(risk=1.0, RR=2.0, slBuf=0.5, maxDepth=3.0, maxTrades=2, BE=1.0, BEplus=0.10, partial=50, setupExp=30,
             mssS=2, disp=1.0, minFVG=0.3, fvgWait=5, paWait=15, entry=0, spread=0.30, bal=10000, bias=0,
             lon=1, nyk=1, useH1=1, useH4=1, usePD=1, maxSpR=0.2, maxSL=3.0, sweepPA=3,
-            pin=1, pinR=2.0, eng=1, star=1, slMode=0, slK=0.5, maxSLz=3.0, filtM1=0)
+            pin=1, pinR=2.0, eng=1, star=1, slMode=0, slK=0.5, maxSLz=3.0, filtM1=0, tpMode=0, minRR=1.0, tpBuf=0.0, tpS=2)
 ORDER = ['risk', 'RR', 'slBuf', 'maxDepth', 'maxTrades', 'BE', 'BEplus', 'partial', 'setupExp', 'mssS', 'disp',
          'minFVG', 'fvgWait', 'paWait', 'entry', 'spread', 'bal', 'bias', 'lon', 'nyk', 'useH1', 'useH4', 'usePD',
-         'maxSpR', 'maxSL', 'sweepPA', 'slMode', 'slK', 'maxSLz', 'filtM1']
+         'maxSpR', 'maxSL', 'sweepPA', 'slMode', 'slK', 'maxSLz', 'filtM1', 'tpMode', 'minRR', 'tpBuf', 'tpS']
 TFN = {1: 'H1', 2: 'H4', 3: 'PDH/PDL'}
 
 
@@ -68,7 +69,7 @@ def go(**kw):
     cfg = np.array([p[k] for k in ORDER], float)
     Pc = np.array([p['pin'], p['pinR'], p['eng'], p['star']], float)
     r = run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
-               H1['h'], H1['l'], H4['h'], H4['l'], b1, b4, cfg, Pc, aH1, aH4)
+               H1['h'], H1['l'], H4['h'], H4['l'], b1, b4, cfg, Pc, aH1, aH4, H1['st'], H4['st'], prevDS, H1['gid'], H4['gid'])
     cols = ['tin', 'tout', 'dir', 'tf', 'R', 'pnl', 'kz', 'risk', 'entry', 'sl', 'tp', 'lvl', 'sw', 'mi', 'zt', 'zb']
     T = pd.DataFrame({k: v for k, v in zip(cols, r)})
     T['date'] = pd.to_datetime(T.tin * 60, unit='s')
