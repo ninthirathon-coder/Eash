@@ -31,7 +31,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     cA = np.zeros(2, np.int64); cExt = np.zeros(2); cL = np.zeros(2); cTF = np.zeros(2, np.int64); cF = np.zeros(2, np.int64)
     cEI = np.zeros(2, np.int64); cLeg = np.zeros(2); cPL = np.zeros(2); cAge = np.zeros(2, np.int64); cPh = np.zeros(2, np.int64)
     cBI = np.zeros(2, np.int64); cMA = np.zeros(2, np.int64); cZT = np.zeros(2); cZB = np.zeros(2); cZA = np.zeros(2, np.int64)
-    cSw = np.zeros(2, np.int64); cHi = np.zeros(2)
+    cSw = np.zeros(2, np.int64); cHi = np.zeros(2); sZK = np.zeros(2, np.int64)
     L_sw = np.zeros(MAXT, np.int64); L_mi = np.zeros(MAXT, np.int64); L_zt = np.zeros(MAXT); L_zb = np.zeros(MAXT)
     nt = 0
     # active HTF levels: side 0 = lows (sell-side liquidity), 1 = highs
@@ -248,25 +248,64 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                 if not (touched and candle(o, h, l, c, t, d, Pc)): continue
 
             if sPh[sd] == 1 and cfg[14] == 0:
-                # find M1 FVG after the sweep extreme and arm the zone
-                for i in range(1, 7):
-                    if t - i < sEI[sd]: break
-                    a_ = t + 1 - i; b_ = t - 1 - i
-                    if d > 0:
-                        if l[a_] <= h[b_]: continue
-                        gT = l[a_]; gB = h[b_]
-                    else:
-                        if h[a_] >= l[b_]: continue
-                        gT = l[b_]; gB = h[a_]
-                    if gT - gB < cfg[11] * a1: continue
-                    if (d > 0 and gB <= sExt[sd]) or (d < 0 and gT >= sExt[sd]): continue
-                    fl = False
-                    for k2 in range(1, i):
-                        jj = t + 1 - k2
-                        if (d > 0 and l[jj] <= gB) or (d < 0 and h[jj] >= gT): fl = True
-                    if fl: continue
-                    sPh[sd] = 2; sZT[sd] = gT; sZB[sd] = gB; sZA[sd] = 0
-                    break
+                hm = int(cfg[59])     # 0 FVG only, 1 FVG->implied, 2 FVG->OB, 3 FVG->implied->OB, 4 OB only
+                found = False
+                if hm != 4:
+                    # standard M1 FVG after the sweep extreme
+                    for i in range(1, 7):
+                        if t - i < sEI[sd]: break
+                        a_ = t + 1 - i; b_ = t - 1 - i
+                        if d > 0:
+                            if l[a_] <= h[b_]: continue
+                            gT = l[a_]; gB = h[b_]
+                        else:
+                            if h[a_] >= l[b_]: continue
+                            gT = l[b_]; gB = h[a_]
+                        if gT - gB < cfg[11] * a1: continue
+                        if (d > 0 and gB <= sExt[sd]) or (d < 0 and gT >= sExt[sd]): continue
+                        fl = False
+                        for k2 in range(1, i):
+                            jj = t + 1 - k2
+                            if (d > 0 and l[jj] <= gB) or (d < 0 and h[jj] >= gT): fl = True
+                        if fl: continue
+                        sPh[sd] = 2; sZT[sd] = gT; sZB[sd] = gB; sZA[sd] = 0; sZK[sd] = 0; found = True
+                        break
+                if (not found) and (hm == 1 or hm == 3):
+                    # hidden / implied FVG: wicks overlap, but the gap between the wick midpoints remains
+                    for i in range(1, 7):
+                        if t - i < sEI[sd]: break
+                        a_ = t + 1 - i; m_ = t - i; b_ = t - 1 - i
+                        if d * (c[m_] - o[m_]) < cfg[10] * a1: continue          # middle candle must be a displacement candle
+                        if d > 0:
+                            gT = (l[a_] + min(o[a_], c[a_])) / 2.0; gB = (h[b_] + max(o[b_], c[b_])) / 2.0
+                        else:
+                            gT = (l[b_] + min(o[b_], c[b_])) / 2.0; gB = (h[a_] + max(o[a_], c[a_])) / 2.0
+                        if gT - gB < 0.5 * cfg[11] * a1: continue
+                        if (d > 0 and gB <= sExt[sd]) or (d < 0 and gT >= sExt[sd]): continue
+                        fl = False
+                        for k2 in range(1, i):
+                            jj = t + 1 - k2
+                            if (d > 0 and l[jj] <= gB) or (d < 0 and h[jj] >= gT): fl = True
+                        if fl: continue
+                        sPh[sd] = 2; sZT[sd] = gT; sZB[sd] = gB; sZA[sd] = 0; sZK[sd] = 1; found = True
+                        break
+                if (not found) and (hm == 2 or hm == 3 or hm == 4):
+                    # order block: last opposite-colour candle between the sweep extreme and the MSS bar
+                    for j in range(sMI[sd], sEI[sd] - 1, -1):
+                        if d * (c[j] - o[j]) < 0:
+                            gT = o[j] if d > 0 else h[j]
+                            gB = l[j] if d > 0 else o[j]
+                            # price must have left the block completely, and not come back yet
+                            lv = -1
+                            for jj in range(j + 1, t + 1):
+                                if (d > 0 and l[jj] > gT) or (d < 0 and h[jj] < gB): lv = jj; break
+                            ok = lv > 0
+                            if ok:
+                                for jj in range(lv + 1, t + 1):
+                                    if (d > 0 and l[jj] <= gT) or (d < 0 and h[jj] >= gB): ok = False; break
+                            if ok and gT - gB > 0:
+                                sPh[sd] = 2; sZT[sd] = gT; sZB[sd] = gB; sZA[sd] = 0; sZK[sd] = 2; found = True
+                            break
                 continue
 
             # ---------------- entry ----------------
@@ -362,7 +401,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             oTP1 = tp1; oT1 = not (cfg[48] > 0 and d * (tp - tp1) > 0)
             st = 2; od = d; oE = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots
             oRisk = risk; oPnl = 0.0; oBE = False; oFill = t + 1; oTF = sTF[sd]; oKZ = kz; oL = sL[sd]
-            oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]; oMssP = sMss[sd]; oKind = 0
+            oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]; oMssP = sMss[sd]; oKind = 10 + sZK[sd]
             dayTrades += 1
             sA[sd] = 0; rej[18] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 18, d, sL[sd], sTF[sd])
             # fill bar: conservative SL check on the fill bar itself
