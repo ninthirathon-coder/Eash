@@ -62,3 +62,21 @@ EA ทั้งสองตัวล็อกให้ทำงานเฉพ�
 
 ## ICT_TopDown_EA v1.31
 เพดาน SL = 2.5 ATR ของ TF โซน (ผู้ใช้เลือก) → backtest (ไม่รวมตัวกรอง volume) 66 ไม้ +0.246R +15.1% DD -3.9%
+
+## สถานะล่าสุด (ก่อนปิดเครื่อง)
+- EA ตัวหลัก: `MQL5/Experts/ICT_TopDown_EA.mq5` v1.31 (ยังไม่ได้ compile)
+- Visual trade: https://claude.ai/artifact/QyN9pidGgvx8KJPESGUHtE
+- **หน้าวงจุดที่ต้องแก้: https://claude.ai/artifact/DtyuUWFtK6mYLNvW3LaQZb** — วง/โน้ตเก็บใน db ของหน้า (collection `marks`, `notes`)
+  เซสชันใหม่อ่านได้ด้วย ArtifactData `list` collection `marks` และ `notes` ที่ URL นี้
+- งานถัดไป: อ่านวง/โน้ต → backtest กฎที่ผู้ใช้ต้องการ → แก้ EA → ส่งไฟล์ .mq5
+
+## เริ่มต่อในเครื่องใหม่
+```bash
+pip install numpy pandas numba matplotlib
+cd backtest && mkdir -p raw csv && bash download/dl_xauusd.sh    # (แก้ปีในสคริปต์: 2009-2025 + เดือนของปีปัจจุบัน)
+for z in raw/*.zip; do unzip -oq $z -d csv/; done
+python3 prep.py .                    # -> data.npz
+python3 -c "from run_m1 import *; print(stats(go(slMode=1,slK=1.5,filtM1=1,tpMode=2,minRR=0.8,tpS=2,dowMask=30,paWait=10,tp2=1,maxSLzone=2.5)))"
+# ควรได้ 66 ไม้ avgR +0.246 (v1.31)
+```
+`run_m1.py` ต้องมีข้อมูลโลหะเงินด้วย (`AG_DIR`, ใช้กับ SMT): โหลดด้วย `download/dl_xagusd.sh` แล้ว `prep.py` ในโฟลเดอร์นั้น
