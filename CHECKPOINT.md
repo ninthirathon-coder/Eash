@@ -1,7 +1,7 @@
 # Checkpoint: ก่อนเริ่ม EA แบบ Top-down (2026-11-10)
 
-Git tag: `checkpoint-before-topdown-ea` (commit `ae18c98`)
-ย้อนกลับมาจุดนี้: `git checkout checkpoint-before-topdown-ea`
+Commit checkpoint: `fc492b3` บน branch `claude/intelligent-pasteur-f8c6jd`
+ย้อนกลับมาจุดนี้: `git checkout fc492b3` (หรือดูไฟล์ ณ จุดนี้: `git show fc492b3:<path>`)
 
 ## สิ่งที่มีแล้ว
 | ส่วน | ไฟล์ |
