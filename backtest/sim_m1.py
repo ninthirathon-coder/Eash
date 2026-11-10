@@ -28,6 +28,7 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
     L_risk = np.zeros(MAXT); L_ent = np.zeros(MAXT); L_sl = np.zeros(MAXT); L_tp = np.zeros(MAXT); L_lvl = np.zeros(MAXT)
     L_tp1 = np.zeros(MAXT); L_mss = np.zeros(MAXT); oMssP = 0.0
     L_kind = np.zeros(MAXT, np.int64); oKind = 0
+    pExp = 0; pZB = 0.0; pZT = 0.0
     cA = np.zeros(2, np.int64); cExt = np.zeros(2); cL = np.zeros(2); cTF = np.zeros(2, np.int64); cF = np.zeros(2, np.int64)
     cEI = np.zeros(2, np.int64); cLeg = np.zeros(2); cPL = np.zeros(2); cAge = np.zeros(2, np.int64); cPh = np.zeros(2, np.int64)
     cBI = np.zeros(2, np.int64); cMA = np.zeros(2, np.int64); cZT = np.zeros(2); cZB = np.zeros(2); cZA = np.zeros(2, np.int64)
@@ -58,6 +59,21 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
         if cfg[34] > 0:
             spread = cfg[34] * c[t]          # spread as a fraction of price
         # ---------------- execution on bar t ----------------
+        if st == 1 and t > oFill - 1:
+            # pending limit after the PA: cancel on expiry, run to TP1 first, or a close through the FVG
+            if t > pExp or (od > 0 and h[t] >= oTP1) or (od < 0 and l[t] + spread <= oTP1) or \
+               (od > 0 and c[t] < pZB) or (od < 0 and c[t] > pZT):
+                if not ((od > 0 and l[t] + spread <= oE) or (od < 0 and h[t] >= oE)) or t > pExp:
+                    st = 0
+            if st == 1 and ((od > 0 and l[t] + spread <= oE) or (od < 0 and h[t] >= oE)):
+                st = 2; oFill = t; dayTrades += 1
+                if (od > 0 and l[t] <= oSL) or (od < 0 and h[t] + spread >= oSL):
+                    pnl = -oRisk * contract * oLots
+                    bal += pnl; oPnl += pnl; dayPL += pnl
+                    L_t[nt] = t1[t]; L_x[nt] = t1[t]; L_d[nt] = od; L_tf[nt] = oTF; L_kz[nt] = oKZ
+                    L_pnl[nt] = oPnl; L_R[nt] = -1.0; L_risk[nt] = oRisk; L_ent[nt] = oE; L_sl[nt] = oSL; L_tp[nt] = oTP
+                    L_lvl[nt] = oL; L_tp1[nt] = oTP1; L_mss[nt] = oMssP; L_kind[nt] = oKind; L_sw[nt] = oSw; L_mi[nt] = oMI; L_zt[nt] = oZT; L_zb[nt] = oZB
+                    nt += 1; st = 0
         if st == 2 and t > oFill:
             bo = o[t]; bh = h[t]; bl = l[t]
             if od > 0:
@@ -320,6 +336,12 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             if dow < 5 and ((int(cfg[39]) >> dow) & 1) == 0: sA[sd] = 0; rej[13] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 13, d, sL[sd], sTF[sd]); continue
             if cfg[4] > 0 and dayTrades >= cfg[4]: sBlk[sd] = 12; continue
             entry = o[t + 1] + (spread if d > 0 else 0.0)
+            pend = False
+            if cfg[60] > 0:
+                # wait for a pullback back to the FVG after the PA: 1 = FVG near edge, 2 = FVG CE, 3 = FVG far edge
+                lim = (sZT[sd] if d > 0 else sZB[sd]) if cfg[60] == 1 else ((sZT[sd] + sZB[sd]) / 2.0 if cfg[60] == 2 else (sZB[sd] if d > 0 else sZT[sd]))
+                lim = lim + (spread if d > 0 else 0.0)
+                if d * (entry - lim) > 0: entry = lim; pend = True
             if cfg[46] > 0 and mOpen[t + 1] > 0:                       # Power of 3: buy below / sell above NY midnight open
                 if (d > 0 and entry > mOpen[t + 1]) or (d < 0 and entry < mOpen[t + 1]): sA[sd] = 0; continue
             if cfg[45] > 0:                                             # OTE: retracement of the displacement leg
@@ -402,8 +424,11 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
             st = 2; od = d; oE = entry; oSL = sl; oTP = tp; oLots = lots; oLots0 = lots
             oRisk = risk; oPnl = 0.0; oBE = False; oFill = t + 1; oTF = sTF[sd]; oKZ = kz; oL = sL[sd]
             oSw = sSw[sd]; oMI = sMI[sd]; oZT = sZT[sd]; oZB = sZB[sd]; oMssP = sMss[sd]; oKind = 10 + sZK[sd]
-            dayTrades += 1
             sA[sd] = 0; rej[18] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 18, d, sL[sd], sTF[sd])
+            if pend:
+                st = 1; pExp = t + 1 + int(cfg[61]); pZB = sZB[sd]; pZT = sZT[sd]
+                continue
+            dayTrades += 1
             # fill bar: conservative SL check on the fill bar itself
             if (d > 0 and l[t + 1] <= sl) or (d < 0 and h[t + 1] + spread >= sl):
                 pnl = -risk * contract * lots

@@ -107,7 +107,7 @@ from sim import candle
 
 
 @nb.njit(cache=True)
-def study_pa(t, o, h, l, c, atr, s, disp, maxAge, spread, Pc, paWin, slMode):
+def study_pa(t, o, h, l, c, atr, s, disp, maxAge, spread, Pc, paWin, slMode, entMode=0, waitN=12):
     """First touch of a fresh OB, then wait up to paWin bars for a PA candle that wicks into the OB and closes back
     outside it (not through). Enter at the next bar's open. slMode 0: beyond the OB, 1: beyond the PA candle wick."""
     n = len(c)
@@ -142,7 +142,9 @@ def study_pa(t, o, h, l, c, atr, s, disp, maxAge, spread, Pc, paWin, slMode):
                 inz = (l[u] <= zT) if d > 0 else (h[u] >= zB)
                 if inz and candle(o, h, l, c, u, d, Pc): u0 = u; break
             if u0 < 0: continue
-            entry = o[u0 + 1] + (spread if d > 0 else 0.0)
+            if entMode == 0: entry = o[u0 + 1] + (spread if d > 0 else 0.0)
+            elif entMode == 1: entry = zT + spread if d > 0 else zB                      # limit back at the OB edge
+            else: entry = (h[u0] + l[u0]) / 2.0 + (spread if d > 0 else 0.0)           # limit at the PA candle midpoint
             if slMode == 0: sl = zB - 0.1 * a if d > 0 else zT + 0.1 * a + spread
             else: sl = l[u0] - 0.1 * a if d > 0 else h[u0] + 0.1 * a + spread
             risk = d * (entry - sl)
@@ -152,15 +154,25 @@ def study_pa(t, o, h, l, c, atr, s, disp, maxAge, spread, Pc, paWin, slMode):
                 if d > 0 and swing_hi(h, r, s, u0) and h[r] > entry + 0.1 * a: tp = h[r]; break
                 if d < 0 and swing_lo(l, r, s, u0) and l[r] + spread < entry - 0.1 * a: tp = l[r] + spread; break
             if tp == 0.0: continue
+            vf = u0 + 1
+            if entMode > 0:
+                if d * (o[u0 + 1] - entry) <= 0: vf = u0 + 1                              # already there at the open
+                else:
+                    vf = -1
+                    for v in range(u0 + 1, min(u0 + 1 + waitN, n)):
+                        if (d > 0 and h[v] >= tp) or (d < 0 and l[v] + spread <= tp): break   # ran to target first
+                        if (d > 0 and l[v] + spread <= entry) or (d < 0 and h[v] >= entry): vf = v; break
+                        if (d > 0 and c[v] < zB) or (d < 0 and c[v] > zT): break
+                    if vf < 0: continue
             res = 0.0; got = -1
-            for v in range(u0 + 1, min(u0 + 2000, n)):
+            for v in range(vf, min(vf + 2000, n)):
                 hs = (l[v] <= sl) if d > 0 else (h[v] + spread >= sl)
                 ht = (h[v] >= tp) if d > 0 else (l[v] + spread <= tp)
-                if v == u0 + 1: ht = False                                         # no TP on the fill bar
+                if v == vf: ht = False                                             # no TP on the fill bar
                 if hs: res = -1.0; got = 0; break
                 if ht: res = d * (tp - entry) / risk; got = 1; break
             if got >= 0 and k < 200000:
-                out[k, 0] = t[u0 + 1]; out[k, 1] = d; out[k, 2] = res; out[k, 3] = got; out[k, 4] = risk
+                out[k, 0] = t[vf]; out[k, 1] = d; out[k, 2] = res; out[k, 3] = got; out[k, 4] = risk
                 out[k, 5] = d * (tp - entry) / risk; out[k, 6] = ((t[u0 + 1] - 420) % 1440) / 60.0
                 k += 1
     return out[:k]
