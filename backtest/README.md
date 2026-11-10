@@ -35,3 +35,13 @@ python3 run.py                  # ผลค่าเริ่มต้น + trad
 | `2_instant_fill.png` | ราคาพุ่งทะลุ FVG ทันทีที่ตั้ง Limit |
 | `3_slow_mss.png` | MSS เกิดช้าหลัง sweep หลายแท่ง |
 | `4_stop_hunt.png` | เคสส่วนน้อย: โดนกวาด SL แล้วกลับไป TP |
+
+## Top-down: โซน TF ใหญ่ → ยืนยันบน M1 (`sim_m1.py`, `run_m1.py`)
+โซน = swing H1/H4 ที่ยังไม่ถูกแตะ + PDH/PDL; เมื่อราคาแทงผ่านโซน ไปดู M1: ปิดกลับ, MSS + displacement, FVG, PA ใน FVG แล้วเข้า
+`from run_m1 import go, stats; print(stats(go(bias=1)))`
+
+| ชุด | ไม้ | Win% | เฉลี่ย/ไม้ | t |
+|---|---|---|---|---|
+| A. ไม่ดู M1 (เข้าเมื่อปิดกลับเข้าโซน) | 2128 | 45.1 | -0.083R | -3.6 |
+| B. M1 sweep + MSS | 544 | 46.5 | -0.076R | -1.7 |
+| C. M1 sweep + MSS + FVG + PA | 170 | 44.7 | -0.061R | -0.7 |
