@@ -114,6 +114,7 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
     sMss = np.zeros(2); sMssDone = np.zeros(2, np.int64); sCand = np.zeros(2, np.int64)
     sIdx = np.zeros(2, np.int64); sAge = np.zeros(2, np.int64); sMAge = np.zeros(2, np.int64); sLeg = np.zeros(2)
     sMI = np.zeros(2, np.int64)
+    sZ = np.zeros(2, np.int64); sZT = np.zeros(2); sZB = np.zeros(2); sZAge = np.zeros(2, np.int64)
     # order state: 0 none, 1 pending, 2 position
     st = 0; od = 0; oEntry = 0.0; oSL = 0.0; oTP = 0.0; oLots = 0.0; oLots0 = 0.0; oSet = 0; oRisk = 0.0
     oPnl = 0.0; oBE = False; oLvl = 0; oKZ = 0; oFillT = 0; oMkt = 0
@@ -231,7 +232,7 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
             for _o in range(1):
                 if sAct[si] == 1:
                     sAge[si] += 1
-                    if sAge[si] > cfg[14]:
+                    if sAge[si] > cfg[14] and sZ[si] == 0:
                         sAct[si] = 0
                         break
                     if sMssDone[si] == 0:
@@ -239,7 +240,7 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                             sAct[si] = 0; break
                         if d > 0 and l[t] < sExt[si]: sExt[si] = l[t]
                         if d < 0 and h[t] > sExt[si]: sExt[si] = h[t]
-                        if candle(o, h, l, c, t, d, Pc): sCand[si] = 1
+                        if candle(o, h, l, c, t, d, Pc) and (cfg[31] <= 0 or t - sIdx[si] <= cfg[31]): sCand[si] = 1
                         broke = c[t] > sMss[si] if d > 0 else c[t] < sMss[si]
                         disp = False
                         if broke:
@@ -261,47 +262,61 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                     else: sLeg[si] = min(sLeg[si], l[t])
 
                     if sMssDone[si] == 1:
-                        if sMAge[si] > cfg[18]:
-                            sAct[si] = 0; break
-                        # ---------------- TryEntry ----------------
+                        em = int(cfg[19])
+                        mkt = ask if d > 0 else bid
+                        if em == 3 and sZ[si] == 1:
+                            # ---- waiting for PA rejection inside the FVG ----
+                            sZAge[si] += 1
+                            if sZAge[si] > cfg[32]:
+                                sAct[si] = 0; sZ[si] = 0; break
+                            if (d > 0 and c[t] < sZB[si]) or (d < 0 and c[t] > sZT[si]):
+                                sAct[si] = 0; sZ[si] = 0; break          # closed through the FVG = failed
+                            touched = l[t] <= sZT[si] if d > 0 else h[t] >= sZB[si]
+                            if not (touched and candle(o, h, l, c, t, d, Pc)): break
+                            has = True; top = sZT[si]; bot = sZB[si]
+                        else:
+                            if sMAge[si] > cfg[18]:
+                                sAct[si] = 0; break
+                        # ---------------- gating (TryEntry) ----------------
                         nyMin = (now - 420) % 1440
                         hr = nyMin / 60.0
                         kz = 0
                         if cfg[25] > 0 and hr >= 2.0 and hr < 5.0: kz = 1
                         if cfg[26] > 0 and hr >= 7.0 and hr < 10.0: kz = 2
                         if cfg[25] == 0 and cfg[26] == 0: kz = 3
-                        if kz == 0: break
-                        if st != 0: break
-                        if cfg[5] > 0 and dayTrades >= cfg[5]: break
-                        if cfg[6] > 0:
-                            flt = 0.0
-                            startBal = bal - dayPL
-                            if startBal > 0 and dayPL + flt <= -cfg[6] / 100.0 * startBal: break
-                        # FindFVG
-                        has = False; top = 0.0; bot = 0.0
-                        for i in range(1, 7):
-                            mid = t - i            # shift i+1
-                            if mid < sIdx[si]: break
-                            a1 = t + 1 - i; a3 = t - 1 - i
-                            if d > 0:
-                                if l[a1] <= h[a3]: continue
-                                gT = l[a1]; gB = h[a3]
-                            else:
-                                if h[a1] >= l[a3]: continue
-                                gT = l[a3]; gB = h[a1]
-                            if gT - gB < cfg[17] * a: continue
-                            if d > 0 and gB <= sExt[si]: continue
-                            if d < 0 and gT >= sExt[si]: continue
-                            filled = False
-                            for k in range(1, i):
-                                jj = t + 1 - k
-                                if d > 0 and l[jj] <= gB: filled = True
-                                if d < 0 and h[jj] >= gT: filled = True
-                            if filled: continue
-                            has = True; top = gT; bot = gB; break
-                        mkt = ask if d > 0 else bid
-                        em = int(cfg[19])
-                        if em == 2:
+                        armOnly = em == 3 and sZ[si] == 0
+                        if not armOnly:
+                            if kz == 0: break
+                            if st != 0: break
+                            if cfg[5] > 0 and dayTrades >= cfg[5]: break
+                            if cfg[6] > 0:
+                                startBal = bal - dayPL
+                                if startBal > 0 and dayPL <= -cfg[6] / 100.0 * startBal: break
+                        if not (em == 3 and sZ[si] == 1):
+                            # FindFVG
+                            has = False; top = 0.0; bot = 0.0
+                            for i in range(1, 7):
+                                mid = t - i            # shift i+1
+                                if mid < sIdx[si]: break
+                                a1 = t + 1 - i; a3 = t - 1 - i
+                                if d > 0:
+                                    if l[a1] <= h[a3]: continue
+                                    gT = l[a1]; gB = h[a3]
+                                else:
+                                    if h[a1] >= l[a3]: continue
+                                    gT = l[a3]; gB = h[a1]
+                                if gT - gB < cfg[17] * a: continue
+                                if d > 0 and gB <= sExt[si]: continue
+                                if d < 0 and gT >= sExt[si]: continue
+                                filled = False
+                                for k in range(1, i):
+                                    jj = t + 1 - k
+                                    if d > 0 and l[jj] <= gB: filled = True
+                                    if d < 0 and h[jj] >= gT: filled = True
+                                if filled: continue
+                                has = True; top = gT; bot = gB; break
+                        if em == 2 or em == 3:
+                            if em == 3 and not has: break
                             entry = mkt
                         else:
                             if not has: break
@@ -310,12 +325,15 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                             eqp = (sExt[si] + sLeg[si]) / 2.0
                             if d > 0:
                                 if bot > eqp: break
-                                entry = min(entry, eqp)
+                                if em != 3: entry = min(entry, eqp)
                             else:
                                 if top < eqp: break
-                                entry = max(entry, eqp)
+                                if em != 3: entry = max(entry, eqp)
+                        if armOnly:
+                            sZ[si] = 1; sZT[si] = top; sZB[si] = bot; sZAge[si] = 0
+                            break
                         sl = sExt[si] - d * cfg[3] * a
-                        isM = em == 2 or (ask <= entry if d > 0 else bid >= entry)
+                        isM = em >= 2 or (ask <= entry if d > 0 else bid >= entry)
                         if isM: entry = mkt
                         entry = np.round(entry, 2); sl = np.round(sl, 2)
                         risk = d * (entry - sl)
@@ -340,7 +358,7 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                             bal -= com; oPnl -= com; dayPL -= com
                         else:
                             st = 1
-                        sAct[si] = 0
+                        sAct[si] = 0; sZ[si] = 0
                     break
 
             if sAct[si] == 1:
@@ -411,7 +429,7 @@ def run(m1t, m1o, m1h, m1l, m5t, o, h, l, c, m5s, m5e, atr, bias, dayFirst, pdh,
                 if (d > 0 and v > c[t]) or (d < 0 and v < c[t]): mss = v
             if mss == 0.0:
                 continue
-            sAct[si] = 1; sLvl[si] = best; sLt[si] = bestT
+            sAct[si] = 1; sZ[si] = 0; sLvl[si] = best; sLt[si] = bestT
             sExt[si] = l[t] if d > 0 else h[t]
             sMss[si] = mss; sMssDone[si] = 0; sIdx[si] = t; sAge[si] = 0; sMAge[si] = 0
             sLeg[si] = h[t] if d > 0 else l[t]

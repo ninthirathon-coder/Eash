@@ -30,7 +30,8 @@ enum ENUM_ENTRY_MODE
   {
    ENTRY_FVG_EDGE = 0, // Limit ที่ขอบ FVG
    ENTRY_FVG_CE   = 1, // Limit ที่ CE (กึ่งกลาง FVG)
-   ENTRY_MARKET   = 2  // Market ทันทีเมื่อเกิด MSS
+   ENTRY_MARKET   = 2, // Market ทันทีเมื่อเกิด MSS
+   ENTRY_FVG_PA   = 3  // รอราคาเทส FVG + แท่งเทียนปฏิเสธ แล้วเข้า Market
   };
 
 enum ENUM_TP_MODE
@@ -98,13 +99,15 @@ input int             InpMSSStrength       = 2;          // ความแร�
 input double          InpDisplacementATR   = 1.0;        // ตัวแท่ง displacement ขั้นต่ำ (x ATR)
 input double          InpMinFVGATR         = 0.15;       // ขนาด FVG ขั้นต่ำ (x ATR)
 input int             InpFVGWaitBars       = 3;          // รอ FVG หลัง MSS ได้กี่แท่ง
-input ENUM_ENTRY_MODE InpEntryMode         = ENTRY_FVG_CE; // วิธีเข้า
+input ENUM_ENTRY_MODE InpEntryMode         = ENTRY_FVG_PA; // วิธีเข้า
+input int             InpPAWaitBars        = 12;         // รอ PA ใน FVG ได้กี่แท่ง (โหมด FVG+PA)
 
 input group "=== แท่งเทียนยืนยัน ==="
 input bool            InpRequireCandle     = true;       // ต้องมีแท่งเทียนกลับตัวหลัง sweep
 input bool            InpUsePinBar         = true;       // Pin bar / Hammer / Shooting star
 input bool            InpUseEngulfing      = true;       // Engulfing
 input bool            InpUseStar           = true;       // Morning / Evening star
+input int             InpSweepPABars       = 2;          // PA ต้องเกิดภายในกี่แท่งหลัง sweep (0=เมื่อไรก็ได้ก่อน MSS)
 input double          InpPinWickRatio      = 2.0;        // ไส้ต่อเนื้อเทียนขั้นต่ำของ Pin bar
 
 input group "=== Kill Zones (เวลานิวยอร์ก) ==="
@@ -137,6 +140,10 @@ struct SSetup
    int      age;
    int      mssAge;
    double   legFav;     // high ของขาขึ้น (buy) / low ของขาลง (sell) นับจาก sweep
+   bool     zoneArmed;  // โหมด FVG+PA: เจอ FVG แล้ว รอ PA
+   double   zTop;
+   double   zBot;
+   int      zAge;
   };
 
 //--- globals
@@ -485,6 +492,10 @@ void ResetSetup(SSetup &s)
    s.age       = 0;
    s.mssAge    = 0;
    s.legFav    = 0;
+   s.zoneArmed = false;
+   s.zTop      = 0;
+   s.zBot      = 0;
+   s.zAge      = 0;
   }
 
 void DetectSweep(int dir)
@@ -539,7 +550,7 @@ void DetectSweep(int dir)
 void UpdateSetup(SSetup &s)
   {
    s.age++;
-   if(s.age > InpSetupExpiryBars) { ResetSetup(s); return; }
+   if(s.age > InpSetupExpiryBars && !s.zoneArmed) { ResetSetup(s); return; }
 
    int dir    = s.dir;
    MqlRates b = g_r[1];
@@ -553,7 +564,9 @@ void UpdateSetup(SSetup &s)
       if(dir > 0 && b.low  < s.extreme) s.extreme = b.low;
       if(dir < 0 && b.high > s.extreme) s.extreme = b.high;
 
-      if(CandleSignal(dir, 1)) s.candleOk = true;
+      // PA กลับตัวต้องเกิดใกล้ sweep (แท่ง sweep เอง หรือภายใน InpSweepPABars แท่ง)
+      int sinceSweep = iBarShift(_Symbol, InpEntryTF, s.sweepTime, false) - 1;
+      if(CandleSignal(dir, 1) && (InpSweepPABars <= 0 || sinceSweep <= InpSweepPABars)) s.candleOk = true;
 
       bool broke = (dir > 0) ? (b.close > s.mssLevel) : (b.close < s.mssLevel);
       if(broke && HasDisplacement(dir, s.sweepTime))
@@ -582,6 +595,19 @@ void UpdateSetup(SSetup &s)
 
    if(s.mssDone)
      {
+      if(InpEntryMode == ENTRY_FVG_PA && s.zoneArmed)
+        {
+         // รอราคาย่อกลับมาเทส FVG แล้วเกิดแท่งเทียนปฏิเสธ (PA) ก่อนเข้า
+         s.zAge++;
+         if(s.zAge > InpPAWaitBars) { ResetSetup(s); return; }
+         if((dir > 0 && b.close < s.zBot) || (dir < 0 && b.close > s.zTop))
+           { Print("ปิดทะลุ FVG -> ยกเลิก setup"); ResetSetup(s); return; }
+         bool touched = (dir > 0) ? (b.low <= s.zTop) : (b.high >= s.zBot);
+         if(!touched)              { g_status = "รอราคาเทส FVG"; return; }
+         if(!CandleSignal(dir, 1)) { g_status = "เทส FVG แล้ว รอแท่งเทียนปฏิเสธ"; return; }
+         TryEntry(s);
+         return;
+        }
       if(s.mssAge > InpFVGWaitBars) { ResetSetup(s); return; }
       TryEntry(s);
      }
@@ -625,8 +651,9 @@ bool FindFVG(const SSetup &s, double &top, double &bot, datetime &t)
 
 void TryEntry(SSetup &s)
   {
+   bool armOnly = (InpEntryMode == ENTRY_FVG_PA && !s.zoneArmed);   // แค่บันทึก FVG ยังไม่เข้า
    string why;
-   if(!CanOpenNewTrade(why)) { g_status = why; return; }
+   if(!armOnly && !CanOpenNewTrade(why)) { g_status = why; return; }
 
    int    dir = s.dir;
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
@@ -635,11 +662,20 @@ void TryEntry(SSetup &s)
 
    double   top = 0, bot = 0;
    datetime fvgT = 0;
-   bool     hasFVG = FindFVG(s, top, bot, fvgT);
+   bool     hasFVG;
+   if(InpEntryMode == ENTRY_FVG_PA && s.zoneArmed)
+     { top = s.zTop; bot = s.zBot; hasFVG = true; fvgT = s.sweepTime; }
+   else
+      hasFVG = FindFVG(s, top, bot, fvgT);
 
    double entry;
    if(InpEntryMode == ENTRY_MARKET)
       entry = mkt;
+   else if(InpEntryMode == ENTRY_FVG_PA)
+     {
+      if(!hasFVG) return;
+      entry = mkt;
+     }
    else
      {
       if(!hasFVG) return;                            // รอ FVG แท่งถัดไป
@@ -652,8 +688,8 @@ void TryEntry(SSetup &s)
      {
       // ให้เข้าเฉพาะส่วนของ FVG ที่อยู่ในโซน discount (buy) / premium (sell) ของขา displacement
       double eq = (s.extreme + s.legFav) / 2.0;
-      if(dir > 0) { if(bot > eq) { g_status = "FVG อยู่ใน premium"; return; } entry = MathMin(entry, eq); }
-      else        { if(top < eq) { g_status = "FVG อยู่ใน discount"; return; } entry = MathMax(entry, eq); }
+      if(dir > 0) { if(bot > eq) { g_status = "FVG อยู่ใน premium"; return; } if(InpEntryMode != ENTRY_FVG_PA) entry = MathMin(entry, eq); }
+      else        { if(top < eq) { g_status = "FVG อยู่ใน discount"; return; } if(InpEntryMode != ENTRY_FVG_PA) entry = MathMax(entry, eq); }
      }
    else if(InpPDMode == PD_HTF)
      {
@@ -662,10 +698,18 @@ void TryEntry(SSetup &s)
         { g_status = "ราคาอยู่ผิดโซน P/D (HTF)"; return; }
      }
 
+   if(armOnly)
+     {
+      s.zoneArmed = true; s.zTop = top; s.zBot = bot; s.zAge = 0;
+      DrawFVG(dir, fvgT, top, bot);
+      g_status = "เจอ FVG แล้ว รอ PA";
+      return;
+     }
+
    double sl = s.extreme - dir * InpSLBufferATR * g_atr;
 
    // ถ้าราคาปัจจุบันอยู่ในโซนเข้าแล้ว -> เข้า market
-   bool isMarket = (InpEntryMode == ENTRY_MARKET) || (dir > 0 ? ask <= entry : bid >= entry);
+   bool isMarket = (InpEntryMode == ENTRY_MARKET || InpEntryMode == ENTRY_FVG_PA) || (dir > 0 ? ask <= entry : bid >= entry);
    if(isMarket) entry = mkt;
 
    entry = NP(entry);
@@ -1028,7 +1072,7 @@ void ShowPanel()
       txt += (i == 0 ? "Buy setup : " : "Sell setup: ");
       if(!s.active) txt += "-\n";
       else
-         txt += "sweep " + s.levelName + (s.mssDone ? " | MSS OK" : " | รอ MSS") +
+         txt += "sweep " + s.levelName + (s.zoneArmed ? " | รอ PA ใน FVG" : s.mssDone ? " | MSS OK" : " | รอ MSS") +
                 (s.candleOk ? " | candle OK" : " | รอแท่งเทียน") + "\n";
      }
    if(g_status != "") txt += "สถานะ: " + g_status + "\n";

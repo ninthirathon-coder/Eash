@@ -11,15 +11,16 @@ EA ที่เทรดตามแนวคิด **ICT (Inner Circle Trader)*
 | 1 | **HTF Bias** | ไล่โครงสร้างตลาดบน TF ใหญ่ (ค่าเริ่มต้น H1) ถ้าปิดทะลุ swing high ล่าสุด = ขาขึ้น, ทะลุ swing low = ขาลง (BOS/CHoCH) และเทรดตามทางนั้นเท่านั้น |
 | 2 | **Liquidity** | ทำเครื่องหมายระดับ liquidity: Previous Day High/Low, Asian session High/Low และ Swing High/Low บน TF เล็ก ที่ราคายังไม่เคยแตะ |
 | 3 | **Liquidity Sweep** | แท่งเทียนแทงไส้ทะลุระดับนั้นแล้ว **ปิดกลับเข้ามา** (stop hunt / turtle soup) |
-| 4 | **แท่งเทียนยืนยัน** | หลัง sweep ต้องเจอ Pin bar (Hammer/Shooting star), Engulfing หรือ Morning/Evening star ก่อนเกิด MSS |
+| 4 | **แท่งเทียนยืนยัน (PA ที่ sweep)** | ต้องเจอ Pin bar (Hammer/Shooting star), Engulfing หรือ Morning/Evening star บนแท่ง sweep หรือภายใน 2 แท่งถัดไป (`InpSweepPABars`) |
 | 5 | **MSS + Displacement** | ราคาปิดทะลุ swing ฝั่งตรงข้าม ด้วยแท่งที่มีเนื้อใหญ่ ≥ 1×ATR |
-| 6 | **FVG** | หา Fair Value Gap ที่เกิดในขา displacement แล้วตั้ง Limit ที่ CE (50% ของ FVG) หรือขอบ FVG |
+| 6 | **FVG + PA** | หา Fair Value Gap ในขา displacement แล้ว**รอราคาย่อกลับมาเทส FVG และเกิดแท่งเทียนปฏิเสธ** (Pin bar / Engulfing / Star ที่ปิดไม่หลุด FVG) จึงเข้า Market (ค่าเริ่มต้น `ENTRY_FVG_PA`) หรือเลือกแบบเดิม: Limit ที่ CE/ขอบ FVG |
 | 7 | **Premium / Discount** | ซื้อเฉพาะส่วนที่อยู่ใน discount (ต่ำกว่า 50% ของขา) / ขายใน premium |
 | 8 | **Kill Zone** | ส่งออเดอร์เฉพาะช่วง London (02:00–05:00 NY) และ New York (07:00–10:00 NY) |
 
 **SL** วางหลังไส้ sweep + buffer (0.1×ATR) · **TP** ใช้ RR คงที่ หรือ liquidity ฝั่งตรงข้าม  
 **จัดการออเดอร์**: ได้กำไร 1R → ปิด 50% + กันทุน → เลื่อน SL ตาม swing ถัดไป  
-Limit ที่ไม่ถูกแมตช์จะถูกยกเลิกหลัง 12 แท่ง หรือเมื่อราคาวิ่งถึง TP ไปก่อน
+โหมด FVG+PA: ถ้าไม่เกิด PA ใน FVG ภายใน 12 แท่ง (`InpPAWaitBars`) หรือแท่งปิดทะลุ FVG จะยกเลิก setup
+โหมด Limit: Limit ที่ไม่ถูกแมตช์จะถูกยกเลิกหลัง 12 แท่ง หรือเมื่อราคาวิ่งถึง TP ไปก่อน
 
 ## วิธีติดตั้ง
 
@@ -57,3 +58,11 @@ Limit ที่ไม่ถูกแมตช์จะถูกยกเลิ�
 - ICT เป็นวิธีที่ต้องตีความ EA นี้แปลงเป็นกฎตายตัว ผลจึงอาจต่างจากการเทรดด้วยมือ
 - ไม่มีตัวกรองข่าว ควรปิด EA ช่วงข่าวแรง (NFP, CPI, FOMC)
 - ผลในอดีตไม่รับประกันผลในอนาคต การเทรด Forex/CFD มีความเสี่ยงสูง
+
+## ผล backtest (XAUUSD 2009-2026, ดู `backtest/`)
+| โหมดเข้า | ไม้ | Win% | เฉลี่ย/ไม้ | ผลรวม | Max DD |
+|---|---|---|---|---|---|
+| Limit ที่ CE ของ FVG (เดิม) | 544 | 41.4 | -0.155R | -58% | -61% |
+| **รอ PA ทั้งที่ sweep และที่ FVG (ค่าเริ่มต้นใหม่)** | 135 | 42.2 | **-0.073R** | -11% | -19% |
+
+ขาดทุนต่อไม้ลดลงครึ่งหนึ่ง แต่**ยังไม่ทำกำไร** อย่าใช้กับเงินจริง

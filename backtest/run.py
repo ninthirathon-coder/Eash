@@ -1,7 +1,8 @@
 import sys, json, numpy as np, pandas as pd
 from sim import run, htf_trend
 
-D = '/tmp/claude-0/-home-user-Eash/eaab86b6-dc63-5781-a5d1-6339b6268634/scratchpad/bt'
+import os
+D = os.path.dirname(os.path.abspath(__file__))
 z = np.load(D + '/data.npz')
 t5, o, h, l, c, s5, e5 = (z['m5' + k] for k in ('t', 'o', 'h', 'l', 'c', 's', 'e'))
 n = len(t5)
@@ -42,10 +43,10 @@ np.maximum.at(asLast, Dn[idx] - asD0, idx)
 BASE = dict(risk=1.0, RR=2.0, minRR=1.5, slBuf=0.1, maxSL=3.0, maxTrades=2, maxDL=3.0, BE=1.0, BEplus=0.10,
             partial=50, trail=1, pendExp=12, swS=3, look=80, setupExp=20, mssS=2, disp=1.0, minFVG=0.15,
             fvgWait=3, entry=1, pd=1, reqCandle=1, spread=0.30, bal=10000, useBias=1, lon=1, nyk=1, comm=0.0,
-            pdhl=1, asia=1, swing=1, pin=1, pinR=2.0, eng=1, star=1)
+            pdhl=1, asia=1, swing=1, pin=1, pinR=2.0, eng=1, star=1, sweepPA=0, paWait=12)
 ORDER = ['risk', 'RR', 'minRR', 'slBuf', 'maxSL', 'maxTrades', 'maxDL', 'BE', 'BEplus', 'partial', 'trail',
          'pendExp', 'swS', 'look', 'setupExp', 'mssS', 'disp', 'minFVG', 'fvgWait', 'entry', 'pd', 'reqCandle',
-         'spread', 'bal', 'useBias', 'lon', 'nyk', 'comm', 'pdhl', 'asia', 'swing']
+         'spread', 'bal', 'useBias', 'lon', 'nyk', 'comm', 'pdhl', 'asia', 'swing', 'sweepPA', 'paWait']
 
 
 def go(**kw):
