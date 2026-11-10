@@ -31,4 +31,6 @@ Commit checkpoint: `fc492b3` บน branch `claude/intelligent-pasteur-f8c6jd`
 5. ยังไม่มีชุดไหนมีนัยสำคัญทางสถิติ (t < 2) และค่าที่ดีที่สุดถูกเลือกหลังเห็นผล
 
 ## ขั้นต่อไป
-เขียน EA ตัวใหม่ `MQL5/Experts/ICT_TopDown_EA.mq5` ตามแนวทาง Top-down (ค่าตามแถวตัวหนา) แล้ว forward test บนเดโม
+- [x] เขียน EA ตัวใหม่ `MQL5/Experts/ICT_TopDown_EA.mq5` ตามแนวทาง Top-down (ค่าตามแถวตัวหนา) — ดู `MQL5/Experts/README_ICT_TopDown_EA.md`
+- [ ] Compile + Strategy Tester ด้วยข้อมูลโบรก
+- [ ] Forward test บนเดโม
