@@ -92,3 +92,8 @@ Compile ผ่าน 0 error 0 warning. Tester MetaQuotes-Demo 2026: 2 ไม้
 14 ไม้ +81.9% PF 2.65 win 71% แต่ lot ใหญ่เกิน ~10 เท่า (ไม้แพ้ละ ~$1,000-1,300 = ~10% แทน 1%) เพราะ TICK_VALUE ของ MetaQuotes-Demo
 v1.43: คำนวณ lot ด้วย OrderCalcProfit (สำรอง: max(tick value, contract size)) + log บอกเงินเสี่ยงและ % ต่อไม้
 ไม้ตรงกับ backtest 8/14 (05-09, 12-27, 03-07, 07-10, 12-26, 04-23, 05-08, 06-12)
+
+## v1.44: ทดสอบเพิ่มไม้/กำไร
+- โซน Asia high/low (หลายช่วงเวลา): ไม้ลดลงและเฉลี่ยแย่ลง (Asia อย่างเดียว −0.24 ถึง −0.39R) -> ไม่ใช้ (`backtest/asia.py`)
+- เสี่ยงตาม KZ (ไม้ London +0.45R นิ่งทุกช่วง, NY +0.11R ปีคู่ติดลบ): London 1.5% / NY 1% -> +23.7% DD −6.1% (เดิม +17% DD −4%), ปีคี่ +1.1% -> +4.3%
+- EA v1.44: `InpRiskLondon = 1.5` (0 = ใช้ InpRiskPercent ทุกไม้)

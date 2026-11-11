@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.43"
+#property version     "1.44"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -66,7 +66,8 @@ input long            InpMagic            = 20261111;   // Magic number
 input string          InpComment          = "ICT-TD";   // คอมเมนต์ออเดอร์
 
 input group "=== ความเสี่ยง ==="
-input double          InpRiskPercent      = 1.0;        // ความเสี่ยงต่อไม้ (% Equity)
+input double          InpRiskPercent      = 1.0;        // ความเสี่ยงต่อไม้ (% Equity) — ไม้ช่วง NY / นอก London
+input double          InpRiskLondon       = 1.5;        // ความเสี่ยงไม้ช่วง London KZ (% Equity, 0 = ใช้ค่าบน)
 input double          InpFixedLots        = 0.0;        // Lot คงที่ (>0 = ใช้แทน %Risk)
 input int             InpMaxTradesPerDay  = 2;          // ไม้สูงสุดต่อวัน
 input double          InpMaxDailyLossPct  = 3.0;        // ขาดทุนสูงสุดต่อวัน % (0=ปิด)
@@ -621,6 +622,16 @@ bool InKZ()
    return false;
   }
 
+// v1.44: ไม้ช่วง London ได้ผลดีกว่าและนิ่งกว่า NY (backtest 2009-2026: +0.45R vs +0.11R) -> เสี่ยงมากกว่า
+double RiskPctNow()
+  {
+   if(InpRiskLondon <= 0) return InpRiskPercent;
+   MqlDateTime dt;
+   TimeToStruct(NYNow(), dt);
+   double h = dt.hour + dt.min / 60.0;
+   return (h >= InpLondonStart && h < InpLondonEnd) ? InpRiskLondon : InpRiskPercent;
+  }
+
 bool HasPosition()
   {
    for(int i = PositionsTotal() - 1; i >= 0; i--)
@@ -667,7 +678,7 @@ double CalcLots(int d, double entry, double dist)
      {
       double lpl = LossPerLot(d, entry, dist);
       if(lpl <= 0 || dist <= 0) return 0;
-      v = AccountInfoDouble(ACCOUNT_EQUITY) * InpRiskPercent / 100.0 / lpl;
+      v = AccountInfoDouble(ACCOUNT_EQUITY) * RiskPctNow() / 100.0 / lpl;
      }
    if(step <= 0) step = 0.01;
    v = MathFloor(v / step + 1e-9) * step;
