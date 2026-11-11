@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.41"
+#property version     "1.42"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -32,6 +32,13 @@ enum ENUM_TD_TP
    TD_TP_RR        = 1, // RR คงที่
    TD_TP_SWING_RR  = 2, // swing H1 ตัวแรกที่ให้ RR >= InpMinRR
    TD_TP_OPP_LIQ   = 3  // liquidity ฝั่งตรงข้ามที่ใกล้สุด (ยังไม่ถูกกวาด) ที่ให้ RR >= InpMinRR
+  };
+
+enum ENUM_TD_PRESET
+  {
+   TD_PRESET_DEFAULT = 0, // SL พ้นโซน + TP swing ก่อนกลับตัว (ผลสม่ำเสมอ, DD ต่ำ)
+   TD_PRESET_SHORTSL = 1, // SL สั้นชิดไส้ 1 ATR M1 + TP 3R (ไม้เยอะ กำไรสูง DD สูง)
+   TD_PRESET_CUSTOM  = 2  // ใช้ค่าในหมวด SL / TP ด้านล่างตามที่ตั้งเอง
   };
 
 enum ENUM_TD_TIME
@@ -54,6 +61,7 @@ enum ENUM_TD_SL
   };
 
 input group "=== ทั่วไป ==="
+input ENUM_TD_PRESET  InpPreset           = TD_PRESET_DEFAULT; // ชุดตั้งค่า SL/TP
 input long            InpMagic            = 20261111;   // Magic number
 input string          InpComment          = "ICT-TD";   // คอมเมนต์ออเดอร์
 
@@ -72,7 +80,7 @@ input int             InpZoneSwingStrength = 3;         // ความแรง
 input ENUM_TD_BIAS    InpBias             = TD_BIAS_NONE; // ตัวกรองเทรนด์
 input ENUM_TD_TIME    InpTimeMode         = TD_TIME_AUTO; // วิธีหาเวลานิวยอร์ก
 input int             InpServerGMT        = 2;          // อัตโนมัติ: GMT offset ของโบรกช่วงหน้าหนาว (ชม.)
-input ENUM_TD_DST     InpServerDST        = TD_DST_EU;  // อัตโนมัติ: โบรกเปลี่ยนเวลาตามฤดูแบบไหน
+input ENUM_TD_DST     InpServerDST        = TD_DST_NONE; // อัตโนมัติ: เปลี่ยนเวลาตามฤดู (MetaQuotes-Demo = NONE, โบรกส่วนใหญ่ = EU)
 input int             InpServerMinusNY    = 7;          // กำหนดเอง: เวลาเซิร์ฟเวอร์ - เวลา NY (ชม.)
 
 input group "=== ยืนยันบน M1 ==="
@@ -161,6 +169,10 @@ STD      g_s[2];                // 0 buy, 1 sell
 double   g_a1, g_a5, g_aH1, g_aH4;
 string   g_status = "";
 const string PFX = "ICTTD_";
+// ค่าที่ใช้จริง (มาจากชุดตั้งค่า InpPreset หรือค่าที่ตั้งเอง)
+ENUM_TD_SL P_SLMode;
+ENUM_TD_TP P_TPMode;
+double     P_FixedRR, P_MinRR, P_SLWickATR1;
 const int ZCAP = 64;
 
 //+------------------------------------------------------------------+
@@ -176,6 +188,14 @@ bool IsGoldSymbol()
 
 int OnInit()
   {
+   P_SLMode = InpSLMode; P_TPMode = InpTPMode; P_FixedRR = InpFixedRR; P_MinRR = InpMinRR; P_SLWickATR1 = InpSLWickATR1;
+   if(InpPreset == TD_PRESET_DEFAULT)
+     { P_SLMode = TD_SL_ZONE; P_TPMode = TD_TP_SWING; P_MinRR = 0.8; }
+   else if(InpPreset == TD_PRESET_SHORTSL)
+     { P_SLMode = TD_SL_WICK; P_SLWickATR1 = 1.0; P_TPMode = TD_TP_RR; P_FixedRR = 3.0; P_MinRR = 0.5; }
+   PrintFormat("ICT_TopDown_EA: preset %s | SL %s | TP %s | RR %.1f | minRR %.1f | NY time: %s",
+               EnumToString(InpPreset), EnumToString(P_SLMode), EnumToString(P_TPMode), P_FixedRR, P_MinRR,
+               TimeToString(NYNow(), TIME_DATE | TIME_MINUTES));
    if(!IsGoldSymbol())
      {
       Alert(MQLInfoString(MQL_PROGRAM_NAME), ": เทรดเฉพาะทองคำ (XAUUSD/GOLD) - ไม่ทำงานบน ", _Symbol);
@@ -653,8 +673,8 @@ double FirstSwingRR(const STD &s, double entry, double risk, double spread)
    int ts = InpTPSwingStrength;
    for(int k = 1; k < n - ts && k <= 600; k++)
      {
-      if(s.dir > 0 && SwHi(r, k, ts, 0) && (r[k].high - entry) / risk >= InpMinRR)          return r[k].high;
-      if(s.dir < 0 && SwLo(r, k, ts, 0) && (entry - r[k].low - spread) / risk >= InpMinRR) return r[k].low + spread;
+      if(s.dir > 0 && SwHi(r, k, ts, 0) && (r[k].high - entry) / risk >= P_MinRR)          return r[k].high;
+      if(s.dir < 0 && SwLo(r, k, ts, 0) && (entry - r[k].low - spread) / risk >= P_MinRR) return r[k].low + spread;
      }
    return 0;
   }
@@ -667,7 +687,7 @@ double OppositeLiquidity(int d, double entry, double risk, double spread)
    for(int i = 0; i < n; i++)
      {
       double P = d > 0 ? g_highs[i].price : g_lows[i].price + spread;
-      if(d * (P - entry) / risk < InpMinRR) continue;
+      if(d * (P - entry) / risk < P_MinRR) continue;
       if(best == 0 || d * (P - best) < 0) best = P;
      }
    return best;
@@ -748,7 +768,7 @@ int Enter(STD &s)
    double entry = d > 0 ? ask : bid;
 
    // คัด setup ด้วย SL ตามโครงสร้าง M1 (โหมดชิดไส้ใช้ระยะเผื่อของตัวเอง)
-   double bufM1 = (InpSLMode == TD_SL_WICK) ? InpSLWickATR1 : InpSLBufATR1;
+   double bufM1 = (P_SLMode == TD_SL_WICK) ? P_SLWickATR1 : InpSLBufATR1;
    double slM1 = s.ext - d * bufM1 * g_a1;
    double r1 = d * (entry - slM1);
    if(r1 <= 0 || r1 > InpMaxM1SLATR5 * g_a5 || spread / r1 > InpMaxSpreadToSL) return -1;
@@ -756,7 +776,7 @@ int Enter(STD &s)
    // SL จริง: พ้นโซน TF ใหญ่ (หรือหลังไส้ ถ้าไส้ลึกกว่า)
    double az = (s.tf == 1) ? g_aH1 : g_aH4;
    double sl;
-   if(InpSLMode == TD_SL_WICK) sl = slM1;                     // SL สั้น: เลยไส้ sweep เล็กน้อย
+   if(P_SLMode == TD_SL_WICK) sl = slM1;                     // SL สั้น: เลยไส้ sweep เล็กน้อย
    else
      {
       sl = s.level - d * InpSLZoneATR * az;
@@ -764,26 +784,26 @@ int Enter(STD &s)
      }
    double risk = d * (entry - sl);
    if(risk <= 0) return -1;
-   if(InpSLMode == TD_SL_ZONE && InpMaxSLZoneATR > 0 && risk > InpMaxSLZoneATR * az) { g_status = "SL ไกลเกินเพดาน"; return -1; }
+   if(P_SLMode == TD_SL_ZONE && InpMaxSLZoneATR > 0 && risk > InpMaxSLZoneATR * az) { g_status = "SL ไกลเกินเพดาน"; return -1; }
 
    double tp;
-   if(InpTPMode == TD_TP_SWING)
+   if(P_TPMode == TD_TP_SWING)
      {
       tp = SwingTarget(s, entry, spread);
       if(tp == 0) return -1;
      }
-   else if(InpTPMode == TD_TP_SWING_RR)
+   else if(P_TPMode == TD_TP_SWING_RR)
      {
       tp = FirstSwingRR(s, entry, risk, spread);
       if(tp == 0) { g_status = "ไม่มี swing H1 ที่ให้ RR ถึง"; return -1; }
      }
-   else if(InpTPMode == TD_TP_OPP_LIQ)
+   else if(P_TPMode == TD_TP_OPP_LIQ)
      {
       tp = OppositeLiquidity(d, entry, risk, spread);
       if(tp == 0) { g_status = "ไม่มี liquidity ฝั่งตรงข้ามที่ให้ RR ถึง"; return -1; }
      }
-   else tp = entry + d * InpFixedRR * risk;
-   if(d * (tp - entry) / risk < InpMinRR) return -1;
+   else tp = entry + d * P_FixedRR * risk;
+   if(d * (tp - entry) / risk < P_MinRR) return -1;
 
    // TP1 / TP2: เป้าแรก = swing (ปิดบางส่วน + กันทุน), เป้าสุดท้าย = ขอบ dealing range ถ้าไกลกว่า
    double tp1 = tp;

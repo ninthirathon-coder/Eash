@@ -118,3 +118,11 @@ SL ชิดไส้ + RR 3: กำไรส่วนใหญ่มาจา�
 - `InpTimeMode = TD_TIME_AUTO` (ค่าเริ่มต้น): ใช้ `InpServerGMT` + `InpServerDST` แล้วคำนวณ DST ของนิวยอร์กเอง
 - MetaQuotes-Demo: `InpServerGMT = 2`, `InpServerDST = TD_DST_NONE` (ไฟล์ .set ใน `MQL5/Presets/` ตั้งไว้แล้ว)
 - โบรกส่วนใหญ่ (GMT+2 หน้าหนาว / +3 หน้าร้อน): `InpServerGMT = 2`, `InpServerDST = TD_DST_EU`
+
+## v1.42: เลือกชุดตั้งค่าในตัว EA (ไม่ต้องใช้ไฟล์ .set)
+`InpPreset` (บรรทัดแรกในแท็บ Inputs):
+- `TD_PRESET_DEFAULT`: SL พ้นโซน 1.5 ATR + TP swing ก่อนกลับตัว (RR ≥ 0.8)
+- `TD_PRESET_SHORTSL`: SL ชิดไส้ 1 ATR M1 + TP 3R (RR ≥ 0.5)
+- `TD_PRESET_CUSTOM`: ใช้ค่าในหมวด SL / TP ที่ตั้งเอง
+ค่าเวลาเริ่มต้นตั้งตาม MetaQuotes-Demo (`InpServerGMT = 2`, `InpServerDST = TD_DST_NONE`); โบรกจริงส่วนใหญ่ใช้ `TD_DST_EU`
+EA พิมพ์ชุดที่ใช้และเวลา NY ที่คำนวณได้ลง log ตอนเริ่ม เพื่อเช็กว่าตั้งเวลาถูก
