@@ -28,6 +28,8 @@ header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content:
 h1 { font-size: 1.55rem; line-height: 1.2; margin: 0; font-weight: 700; text-wrap: balance }
 h1 .au { color: var(--gold) }
 .sub { color: var(--muted); font-size: .9rem; margin-top: 2px }
+.drawlink { display: inline-block; margin-top: 8px; font-weight: 600; font-size: .9rem; color: var(--surface); background: var(--gold); padding: 6px 14px; border-radius: 8px; text-decoration: none }
+.drawlink:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px }
 .stats { display: flex; flex-wrap: wrap; gap: 8px }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; min-width: 88px }
 .stat b { display: block; font-family: var(--mono); font-size: 1.05rem; font-variant-numeric: tabular-nums }
@@ -93,6 +95,7 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
     <div>
       <h1>ไม้เทรด ICT Top-down <span class="au">ทองคำ</span></h1>
       <div class="sub">XAUUSD · ย้อนดูทุกไม้ของ EA v1.31 จาก backtest ข้อมูล M1 · เวลาไทย</div>
+      <a class="drawlink" href="https://claude.ai/artifact/DtyuUWFtK6mYLNvW3LaQZb" target="_blank" rel="noopener">◯ วงบนกราฟ + พิมพ์คอมเมนต์ → เปิดหน้าวงจุดที่ต้องแก้</a>
     </div>
     <div class="stats" id="stats"></div>
   </header>
