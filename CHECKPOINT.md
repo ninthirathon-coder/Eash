@@ -80,3 +80,7 @@ python3 -c "from run_m1 import *; print(stats(go(slMode=1,slK=1.5,filtM1=1,tpMod
 # ควรได้ 66 ไม้ avgR +0.246 (v1.31)
 ```
 `run_m1.py` ต้องมีข้อมูลโลหะเงินด้วย (`AG_DIR`, ใช้กับ SMT): โหลดด้วย `download/dl_xagusd.sh` แล้ว `prep.py` ในโฟลเดอร์นั้น
+
+## ICT_TopDown_EA v1.40
+เพิ่มตัวเลือก SL ชิดไส้ (TD_SL_WICK) และ TP แบบ swing H1 แรกที่ RR ถึง / liquidity ฝั่งตรงข้าม ค่าเริ่มต้นยังเป็น v1.31
+SL ไส้ 1 ATR M1 + RR3: 117 ไม้ +0.254R +31% DD -12.8% (ปี 2021-23 ติดลบ) เทียบ v1.31 66 ไม้ +0.246R +15% DD -3.9%

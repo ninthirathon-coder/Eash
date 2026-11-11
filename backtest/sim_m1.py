@@ -397,6 +397,26 @@ def run_m1(t1, o, h, l, c, atr1, atr5, h1c_at, h4c_at, dayStart, pdh, pdl,
                     ex = max(ex, h[jj]) if d > 0 else min(ex, l[jj] + spread)
                 tp = ex - d * cfg[32]
                 if d * (tp - entry) / risk < cfg[31]: sA[sd] = 0; rej[16] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 16, d, sL[sd], sTF[sd]); continue
+            elif cfg[30] == 3 or cfg[30] == 4:
+                # 3: first H1 swing (from the reversal backwards) that pays at least minRR
+                # 4: nearest still-unswept opposite liquidity (H1/H4 swing, PDH/PDL, PWH/PWL) that pays at least minRR
+                tp = 0.0
+                if cfg[30] == 3:
+                    gS = h1gid[sEI[sd]]; ts = int(cfg[33])
+                    for k in range(gS - 1, max(gS - 600, ts) - 1, -1):
+                        if d > 0 and swing_hi(H1h, k, ts, gS) and (H1h[k] - entry) / risk >= cfg[31]:
+                            if tp == 0.0 or H1h[k] < tp: tp = H1h[k]
+                            break
+                        if d < 0 and swing_lo(H1l, k, ts, gS) and (entry - H1l[k] - spread) / risk >= cfg[31]:
+                            if tp == 0.0 or H1l[k] + spread > tp: tp = H1l[k] + spread
+                            break
+                else:
+                    os_ = 1 - sd
+                    for q in range(nl[os_]):
+                        P = lvP[os_, q] if d > 0 else lvP[os_, q] + spread
+                        if d * (P - entry) / risk >= cfg[31]:
+                            if tp == 0.0 or d * (P - tp) < 0: tp = P
+                if tp == 0.0: sA[sd] = 0; rej[16] += 1; ne2 = logev(EV, ne2, t1[sSw[sd]], t1[t], 16, d, sL[sd], sTF[sd]); continue
             elif cfg[30] == 2:
                 # ICT target: the last swing (zone TF; PDH/PDL use H1) BEFORE the reversal = origin of the leg into the sweep
                 use4 = sTF[sd] == 2

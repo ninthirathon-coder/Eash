@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.31"
+#property version     "1.40"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -28,8 +28,16 @@ enum ENUM_TD_BIAS
 
 enum ENUM_TD_TP
   {
-   TD_TP_SWING = 0, // swing ก่อนจุดกลับตัว (ICT)
-   TD_TP_RR    = 1  // RR คงที่
+   TD_TP_SWING     = 0, // swing ก่อนจุดกลับตัว (ICT)
+   TD_TP_RR        = 1, // RR คงที่
+   TD_TP_SWING_RR  = 2, // swing H1 ตัวแรกที่ให้ RR >= InpMinRR
+   TD_TP_OPP_LIQ   = 3  // liquidity ฝั่งตรงข้ามที่ใกล้สุด (ยังไม่ถูกกวาด) ที่ให้ RR >= InpMinRR
+  };
+
+enum ENUM_TD_SL
+  {
+   TD_SL_ZONE = 0, // พ้นโซน TF ใหญ่ (x ATR ของ TF โซน)
+   TD_SL_WICK = 1  // ชิดไส้ sweep (x ATR ของ M1) = SL สั้น
   };
 
 input group "=== ทั่วไป ==="
@@ -69,7 +77,9 @@ input bool            InpUseStar          = true;       // PA: Morning / Evening
 input double          InpPinWickRatio     = 2.0;        // ไส้/เนื้อ ขั้นต่ำของ Pin bar
 
 input group "=== SL / TP ==="
-input double          InpSLZoneATR        = 1.5;        // SL พ้นโซน (x ATR ของ TF โซน)
+input ENUM_TD_SL      InpSLMode           = TD_SL_ZONE; // วิธีวาง SL
+input double          InpSLZoneATR        = 1.5;        // โหมดพ้นโซน: SL พ้นโซน (x ATR ของ TF โซน)
+input double          InpSLWickATR1       = 1.0;        // โหมดชิดไส้: SL เลยไส้ sweep (x ATR M1)
 input double          InpMaxSLZoneATR     = 2.5;        // เพดานระยะ SL (x ATR ของ TF โซน) เกินนี้ไม่เข้า 0=ปิด
 input double          InpSLBufATR1        = 0.5;        // ระยะเผื่อหลังไส้ M1 (x ATR M1) ใช้ถ้าไส้ลึกกว่าโซน
 input double          InpMaxM1SLATR5      = 3.0;        // คัด setup: SL ตามโครงสร้าง M1 ต้องไม่เกิน (x ATR M5)
@@ -569,6 +579,37 @@ double CalcLots(double dist)
   }
 
 // TP แบบ ICT: swing ล่าสุดก่อนจุดกลับตัว บน TF ของโซน (PDH/PDL ใช้ H1)
+// swing H1 ตัวแรก (ไล่ย้อนจากจุดกลับตัว) ที่ให้ RR >= InpMinRR
+double FirstSwingRR(const STD &s, double entry, double risk, double spread)
+  {
+   int gS = iBarShift(_Symbol, PERIOD_H1, s.extT, false);
+   if(gS < 0) return 0;
+   MqlRates r[];
+   ArraySetAsSeries(r, true);
+   int n = CopyRates(_Symbol, PERIOD_H1, gS, 605, r);
+   int ts = InpTPSwingStrength;
+   for(int k = 1; k < n - ts && k <= 600; k++)
+     {
+      if(s.dir > 0 && SwHi(r, k, ts, 0) && (r[k].high - entry) / risk >= InpMinRR)          return r[k].high;
+      if(s.dir < 0 && SwLo(r, k, ts, 0) && (entry - r[k].low - spread) / risk >= InpMinRR) return r[k].low + spread;
+     }
+   return 0;
+  }
+
+// liquidity ฝั่งตรงข้ามที่ใกล้ที่สุดและยังไม่ถูกกวาด (swing H1/H4, PDH/PDL) ที่ให้ RR >= InpMinRR
+double OppositeLiquidity(int d, double entry, double risk, double spread)
+  {
+   double best = 0;
+   int n = d > 0 ? ArraySize(g_highs) : ArraySize(g_lows);
+   for(int i = 0; i < n; i++)
+     {
+      double P = d > 0 ? g_highs[i].price : g_lows[i].price + spread;
+      if(d * (P - entry) / risk < InpMinRR) continue;
+      if(best == 0 || d * (P - best) < 0) best = P;
+     }
+   return best;
+  }
+
 double SwingTarget(const STD &s, double entry, double spread)
   {
    ENUM_TIMEFRAMES tf = (s.tf == 2) ? PERIOD_H4 : PERIOD_H1;
@@ -643,24 +684,40 @@ int Enter(STD &s)
    double spread = ask - bid;
    double entry = d > 0 ? ask : bid;
 
-   // คัด setup ด้วย SL ตามโครงสร้าง M1
-   double slM1 = s.ext - d * InpSLBufATR1 * g_a1;
+   // คัด setup ด้วย SL ตามโครงสร้าง M1 (โหมดชิดไส้ใช้ระยะเผื่อของตัวเอง)
+   double bufM1 = (InpSLMode == TD_SL_WICK) ? InpSLWickATR1 : InpSLBufATR1;
+   double slM1 = s.ext - d * bufM1 * g_a1;
    double r1 = d * (entry - slM1);
    if(r1 <= 0 || r1 > InpMaxM1SLATR5 * g_a5 || spread / r1 > InpMaxSpreadToSL) return -1;
 
    // SL จริง: พ้นโซน TF ใหญ่ (หรือหลังไส้ ถ้าไส้ลึกกว่า)
    double az = (s.tf == 1) ? g_aH1 : g_aH4;
-   double sl = s.level - d * InpSLZoneATR * az;
-   if(d * (slM1 - sl) < 0) sl = slM1;
+   double sl;
+   if(InpSLMode == TD_SL_WICK) sl = slM1;                     // SL สั้น: เลยไส้ sweep เล็กน้อย
+   else
+     {
+      sl = s.level - d * InpSLZoneATR * az;
+      if(d * (slM1 - sl) < 0) sl = slM1;
+     }
    double risk = d * (entry - sl);
    if(risk <= 0) return -1;
-   if(InpMaxSLZoneATR > 0 && risk > InpMaxSLZoneATR * az) { g_status = "SL ไกลเกินเพดาน"; return -1; }
+   if(InpSLMode == TD_SL_ZONE && InpMaxSLZoneATR > 0 && risk > InpMaxSLZoneATR * az) { g_status = "SL ไกลเกินเพดาน"; return -1; }
 
    double tp;
    if(InpTPMode == TD_TP_SWING)
      {
       tp = SwingTarget(s, entry, spread);
       if(tp == 0) return -1;
+     }
+   else if(InpTPMode == TD_TP_SWING_RR)
+     {
+      tp = FirstSwingRR(s, entry, risk, spread);
+      if(tp == 0) { g_status = "ไม่มี swing H1 ที่ให้ RR ถึง"; return -1; }
+     }
+   else if(InpTPMode == TD_TP_OPP_LIQ)
+     {
+      tp = OppositeLiquidity(d, entry, risk, spread);
+      if(tp == 0) { g_status = "ไม่มี liquidity ฝั่งตรงข้ามที่ให้ RR ถึง"; return -1; }
      }
    else tp = entry + d * InpFixedRR * risk;
    if(d * (tp - entry) / risk < InpMinRR) return -1;
