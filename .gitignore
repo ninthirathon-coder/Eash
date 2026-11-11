@@ -29,3 +29,9 @@ build/
 Thumbs.db
 .vscode/
 .idea/
+
+# backtest data
+backtest/csv/
+backtest/raw/
+backtest/*.npz
+backtest/trades_*.csv

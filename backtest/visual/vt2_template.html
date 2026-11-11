@@ -1,0 +1,487 @@
+<title>ไม้เทรด ICT Top-down ทองคำ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: trading-desk replay — trade list rail on the left, chart + step log on the right; stacks on phones */
+:root {
+  --bg: #f2f4f6; --surface: #ffffff; --surface2: #f7f8fa; --fg: #181c21; --muted: #5d6671; --line: #dce1e6;
+  --gold: #9c7410; --gold-soft: rgba(156,116,16,.12); --up: #11806a; --down: #cf4537; --entry: #2b5fc4;
+  --win: #11806a; --loss: #cf4537; --be: #7a8591; --orange: #c46a12; --teal: #0f7f8c; --violet: #6b4fc8;
+  --font: "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111317; --surface: #181b20; --surface2: #1e2228; --fg: #e7e9ec; --muted: #98a1ab; --line: #2a3038;
+  --gold: #d8b13e; --gold-soft: rgba(216,177,62,.14); --up: #2db795; --down: #ef6b5e; --entry: #739ef0;
+  --win: #2db795; --loss: #ef6b5e; --be: #8b95a0; --orange: #f0a04b; --teal: #3fc1cf; --violet: #a991f5; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #181b20; --surface2: #1e2228; --fg: #e7e9ec; --muted: #98a1ab; --line: #2a3038;
+  --gold: #d8b13e; --gold-soft: rgba(216,177,62,.14); --up: #2db795; --down: #ef6b5e; --entry: #739ef0;
+  --win: #2db795; --loss: #ef6b5e; --be: #8b95a0; --orange: #f0a04b; --teal: #3fc1cf; --violet: #a991f5; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px }
+.wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px }
+h1 { font-size: 1.55rem; line-height: 1.2; margin: 0; font-weight: 700; text-wrap: balance }
+h1 .au { color: var(--gold) }
+.sub { color: var(--muted); font-size: .9rem; margin-top: 2px }
+.stats { display: flex; flex-wrap: wrap; gap: 8px }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; min-width: 88px }
+.stat b { display: block; font-family: var(--mono); font-size: 1.05rem; font-variant-numeric: tabular-nums }
+.stat span { color: var(--muted); font-size: .75rem; letter-spacing: .02em }
+.grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+aside { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; min-width: 0; overflow: hidden }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border-bottom: 1px solid var(--line) }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden }
+.seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .82rem; padding: 4px 10px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--gold-soft); color: var(--fg); font-weight: 600 }
+select { font: inherit; font-size: .82rem; color: var(--fg); background: var(--surface2); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px }
+.count { color: var(--muted); font-size: .78rem; padding: 6px 12px 0 }
+.list { list-style: none; margin: 0; padding: 6px; max-height: 640px; overflow-y: auto }
+@media (max-width: 860px) { .list { max-height: 230px } }
+.list li button { width: 100%; text-align: left; display: grid; grid-template-columns: 6px 1fr auto; gap: 10px; align-items: center;
+  border: 0; background: transparent; color: var(--fg); font: inherit; padding: 7px 8px; border-radius: 7px; cursor: pointer }
+.list li button:hover { background: var(--surface2) }
+.list li button[aria-current="true"] { background: var(--gold-soft) }
+.list li button:focus-visible, .seg button:focus-visible, .nav button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px }
+.stripe { width: 6px; height: 30px; border-radius: 3px }
+.li-main { min-width: 0 }
+.li-main .t { font-size: .85rem; font-weight: 600 }
+.li-main .m { font-size: .76rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.r { font-family: var(--mono); font-size: .85rem; font-variant-numeric: tabular-nums; font-weight: 600 }
+.pos { color: var(--win) } .neg { color: var(--loss) } .zero { color: var(--be) }
+section.viewer { display: flex; flex-direction: column; gap: 12px; min-width: 0 }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0 }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line) }
+.nav { display: flex; align-items: center; gap: 8px }
+.nav button { font: inherit; font-size: .85rem; border: 1px solid var(--line); background: var(--surface2); color: var(--fg); border-radius: 7px; padding: 4px 12px; cursor: pointer }
+.nav .pos-ind { font-family: var(--mono); font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums }
+.title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.pill { font-size: .78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor }
+.pill.buy { color: var(--up) } .pill.sell { color: var(--down) } .pill.zone { color: var(--gold) }
+.pill.res { color: #fff; border-color: transparent }
+.res.win { background: var(--win) } .res.loss { background: var(--loss) } .res.be { background: var(--be) }
+#chart { height: 460px; width: 100% }
+@media (max-width: 600px) { #chart { height: 340px } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 12px 10px; border-top: 1px solid var(--line); font-size: .78rem; color: var(--muted) }
+.legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px }
+.legend .dash { border-top-style: dashed } .legend .dot { border-top-style: dotted }
+.legend .box { width: 14px; height: 10px; border: 1px dashed; border-top: 1px dashed; background: transparent }
+.detail { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 12px }
+@media (max-width: 760px) { .detail { grid-template-columns: minmax(0, 1fr) } }
+.steps { padding: 12px 16px; margin: 0 }
+.steps h2, .nums h2 { font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; font-weight: 600 }
+.steps ol { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px }
+.steps li { font-size: .9rem }
+.steps li .tm { font-family: var(--mono); font-size: .78rem; color: var(--muted) }
+.steps li b { font-family: var(--mono); font-weight: 500 }
+.nums { padding: 12px 16px }
+.nums dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0 }
+.nums dt { color: var(--muted); font-size: .85rem }
+.nums dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; font-size: .9rem }
+.foot { color: var(--muted); font-size: .78rem; max-width: 75ch }
+kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; background: var(--surface2) }
+
+.tabs { display: flex; border-bottom: 1px solid var(--line) }
+.tabs button { flex: 1; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .85rem; padding: 9px 6px; cursor: pointer; border-bottom: 2px solid transparent }
+.tabs button[aria-selected="true"] { color: var(--fg); font-weight: 600; border-bottom-color: var(--gold) }
+.tabs button:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--gold); color: var(--surface); font-size: .7rem; font-weight: 700; text-align: center; margin-left: 6px }
+.chartwrap { position: relative }
+#ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 5 }
+#ov.drawing { pointer-events: auto; cursor: crosshair; touch-action: none }
+.drawbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface2) }
+.drawbar .tool { font: inherit; font-size: .85rem; border: 1px solid var(--gold); color: var(--fg); background: var(--surface); border-radius: 7px; padding: 4px 12px; cursor: pointer; font-weight: 600 }
+.drawbar .tool[aria-pressed="true"] { background: var(--gold); color: var(--surface) }
+.drawbar input[type=text] { flex: 1 1 200px; min-width: 0; font: inherit; font-size: .85rem; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px }
+.drawbar .hint { color: var(--muted); font-size: .78rem; width: 100% }
+.save-state { font-size: .78rem; color: var(--muted) }
+.marks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px }
+.marks li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: start; font-size: .85rem }
+.marks .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px }
+.marks small { color: var(--muted); font-family: var(--mono); font-size: .75rem }
+.marks button { font: inherit; font-size: .75rem; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 6px; padding: 1px 8px; cursor: pointer }
+.notebox { display: flex; flex-direction: column; gap: 6px; margin-top: 10px }
+.notebox textarea { font: inherit; font-size: .88rem; color: var(--fg); background: var(--surface2); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; min-height: 70px; resize: vertical }
+.notebox .row { display: flex; gap: 8px; align-items: center }
+.notebox button { font: inherit; font-size: .82rem; border: 1px solid var(--gold); background: var(--surface); color: var(--fg); border-radius: 7px; padding: 4px 12px; cursor: pointer }
+.marks li.empty-marks { display: block; color: var(--muted); font-size: .85rem }
+[hidden] { display: none !important }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>ไม้เทรด ICT Top-down <span class="au">ทองคำ</span></h1>
+      <div class="sub">XAUUSD · EA v1.31 · วงบนกราฟตรงที่ต้องแก้ แล้วพิมพ์บอกว่าควรเป็นอย่างไร · เวลาไทย</div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="grid">
+    <aside aria-label="รายการไม้">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tabT" aria-selected="true">ไม้ที่เข้า</button>
+        <button type="button" role="tab" id="tabS" aria-selected="false">ครบทุกขั้นแต่ไม่เข้า</button>
+      </div>
+      <div class="filters" id="filtersT">
+        <div class="seg" role="group" aria-label="ผลลัพธ์">
+          <button type="button" data-res="all" aria-pressed="true">ทั้งหมด</button>
+          <button type="button" data-res="win" aria-pressed="false">กำไร</button>
+          <button type="button" data-res="loss" aria-pressed="false">ขาดทุน</button>
+        </div>
+        <select id="fSide" aria-label="ฝั่ง"><option value="all">Buy + Sell</option><option value="Buy">Buy</option><option value="Sell">Sell</option></select>
+        <select id="fYear" aria-label="ปี"><option value="all">ทุกปี</option></select>
+      </div>
+      <div class="filters" id="filtersS" hidden>
+        <select id="fReason" aria-label="เหตุผลที่ไม่เข้า"><option value="all">ทุกเหตุผล</option></select>
+        <select id="fYearS" aria-label="ปี"><option value="all">ทุกปี</option></select>
+      </div>
+      <div class="count" id="count"></div>
+      <ul class="list" id="list"></ul>
+    </aside>
+
+    <section class="viewer">
+      <div class="card">
+        <div class="toolbar">
+          <div class="title-row" id="titleRow"></div>
+          <div class="nav">
+            <button type="button" id="prev" aria-label="ไม้ก่อนหน้า">‹ ก่อนหน้า</button>
+            <span class="pos-ind" id="posInd"></span>
+            <button type="button" id="next" aria-label="ไม้ถัดไป">ถัดไป ›</button>
+          </div>
+        </div>
+        <div class="chartwrap"><div id="chart" role="img" aria-label="กราฟแท่งเทียนของไม้ที่เลือก"></div><svg id="ov" aria-hidden="true"></svg></div>
+        <div class="legend">
+          <span><i class="dash" style="border-color:var(--gold)"></i>โซน TF ใหญ่ที่ถูกกวาด</span>
+          <span><i style="border-color:var(--muted)"></i>ระดับ MSS</span>
+          <span><i class="box dash" style="border-color:var(--entry)"></i>FVG</span>
+          <span><i style="border-color:var(--entry)"></i>Entry</span>
+          <span><i style="border-color:var(--loss)"></i>SL</span>
+          <span><i class="dot" style="border-color:var(--win)"></i>TP1</span>
+          <span><i style="border-color:var(--win)"></i>TP2</span>
+          <span id="tfNote"></span>
+        </div>
+        <div class="drawbar">
+          <button type="button" class="tool" id="drawBtn" aria-pressed="false">◯ วงบนกราฟ</button>
+          <select id="tag" aria-label="ประเภทที่วง">
+            <option value="enter">ควรเข้าตรงนี้</option>
+            <option value="noenter">ไม้นี้ไม่ควรเข้า</option>
+            <option value="entry">จุดเข้าควรอยู่ตรงนี้</option>
+            <option value="sl">SL ควรอยู่ตรงนี้</option>
+            <option value="tp">TP ควรอยู่ตรงนี้</option>
+            <option value="zone">โซน/ระดับที่ควรใช้</option>
+            <option value="other">อื่นๆ</option>
+          </select>
+          <input type="text" id="markNote" placeholder="อธิบายสั้นๆ (ไม่บังคับ) เช่น SL ควรอยู่ใต้ไส้นี้" maxlength="200">
+          <span class="save-state" id="saveState"></span>
+          <div class="hint">กด "วงบนกราฟ" แล้วลากบนกราฟเพื่อวง (กดอีกครั้งเพื่อกลับไปเลื่อน/ซูมกราฟ) · Claude จะอ่านทุกวงและโน้ตไปแก้ EA</div>
+        </div>
+      </div>
+
+      <div class="detail">
+        <div class="card steps"><h2>ลำดับเหตุการณ์</h2><ol id="steps"></ol></div>
+        <div class="card nums"><h2>ตัวเลขของไม้นี้</h2><dl id="nums"></dl></div>
+      </div>
+      <div class="card nums">
+        <h2>จุดที่ต้องแก้ในไม้นี้ <span id="markCount"></span></h2>
+        <ul class="marks" id="marks"></ul>
+        <div class="notebox">
+          <label for="itemNote" class="sub" style="margin:0">โน้ตของไม้นี้ (ถ้ามี)</label>
+          <textarea id="itemNote" maxlength="1500" placeholder="เช่น ไม้นี้ควรรอ MSS บน M5 แทน, TP ควรไปถึง high ของวันก่อน"></textarea>
+          <div class="row"><button type="button" id="saveNote">บันทึกโน้ต</button><span class="save-state" id="noteState"></span></div>
+        </div>
+      </div>
+      <p class="foot">ใช้ปุ่ม <kbd>←</kbd> <kbd>→</kbd> เลื่อนไม้ได้ · วงและโน้ตถูกบันทึกในหน้านี้ คนที่คุณแชร์ให้จะเห็นด้วย · ผลจาก backtest ข้อมูล HistData (ราคา Bid, spread สมมติ $0.30, เสี่ยง 1% ต่อไม้, เพดาน SL 2.5 ATR; ไม่รวมตัวกรอง volume ของ MSS เพราะข้อมูลไม่มี volume) ไม่ใช่ผลเทรดจริง · ราคาโบรกของคุณอาจต่างเล็กน้อย</p>
+    </section>
+  </div>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const S = D.summary;
+  const $ = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const esc = (s) => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const fmtR = (r) => (r > 0 ? '+' : '') + r.toFixed(2) + 'R';
+  const cls = (t) => t.exit === 'SL' ? 'loss' : (t.R > 0.05 ? 'win' : 'be');
+  const exitText = { SL: 'โดน SL', TP: 'ถึง TP', TP2: 'TP1 + TP2', BE: 'TP1 แล้วกันทุน' };
+  const TAGS = { enter: ['ควรเข้าตรงนี้', '--win'], noenter: ['ไม้นี้ไม่ควรเข้า', '--loss'], entry: ['จุดเข้าควรอยู่ตรงนี้', '--entry'],
+    sl: ['SL ควรอยู่ตรงนี้', '--orange'], tp: ['TP ควรอยู่ตรงนี้', '--teal'], zone: ['โซน/ระดับที่ควรใช้', '--gold'], other: ['อื่นๆ', '--violet'] };
+
+  // ---------- stats ----------
+  function renderStats() {
+    const nMarks = marks.length, nItems = new Set(marks.map(m => m.item)).size;
+    $('stats').innerHTML = [
+      [S.n, 'ไม้ (' + S.first + '–' + S.last + ')'], [S.win + '%', 'ชนะ'], [(S.avgR > 0 ? '+' : '') + S.avgR.toFixed(2) + 'R', 'เฉลี่ยต่อไม้'],
+      [(S.ret > 0 ? '+' : '') + S.ret + '%', 'ผลรวม'], [S.dd + '%', 'Max DD'], [nMarks, 'จุดที่วงแล้ว (' + nItems + ' ไม้)']
+    ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+  }
+
+  // ---------- storage (db capability) ----------
+  let db = null, canWrite = false, marks = [], notes = {};
+  const local = { marks: [], notes: {} };
+  const setState = (id, txt) => { $(id).textContent = txt; };
+  (async () => {
+    try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
+    if (!db) { setState('saveState', 'มุมมองนี้บันทึกถาวรไม่ได้ (วงได้ แต่จะหายเมื่อปิดหน้า)'); return; }
+    canWrite = true;
+    try { const u = await window.claude.use('user'); if (u && u.can) { const c = await u.can('data.write'); if (c === false) canWrite = false; } } catch (e) {}
+    if (!canWrite) setState('saveState', 'คุณดูได้อย่างเดียว');
+    let gotM = false;
+    const timer = setTimeout(() => { if (!gotM) setState('saveState', 'ยังเชื่อมต่อที่เก็บข้อมูลไม่ได้'); }, 10000);
+    db.collection('marks').onSnapshot(snap => {
+      if (!snap.metadata.fromCache) { gotM = true; clearTimeout(timer); if (canWrite) setState('saveState', ''); }
+      marks = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+      afterMarks();
+    }, () => { clearTimeout(timer); setState('saveState', 'อ่านจุดที่วงไว้ไม่ได้'); });
+    db.collection('notes').onSnapshot(snap => {
+      notes = {}; snap.docs.forEach(d => { notes[d.id] = d.data(); });
+      showNote();
+    }, () => {});
+  })();
+  function afterMarks() { renderStats(); renderListBadges(); drawMarks(); renderMarkList(); }
+  async function addMark(m) {
+    if (db && canWrite) {
+      setState('saveState', 'กำลังบันทึก…');
+      try { await db.collection('marks').add(m); setState('saveState', 'บันทึกแล้ว'); }
+      catch (e) { setState('saveState', e && e.code === 'quota_exceeded' ? 'ที่เก็บเต็ม ลบวงเก่าบางวงก่อน' : 'บันทึกไม่สำเร็จ'); }
+    } else { m.id = 'local' + Date.now(); marks = marks.concat([m]); afterMarks(); }
+  }
+  async function delMark(id) {
+    if (db && canWrite && !id.startsWith('local')) { try { await db.doc('marks/' + id).delete(); } catch (e) { setState('saveState', 'ลบไม่สำเร็จ'); } }
+    else { marks = marks.filter(m => m.id !== id); afterMarks(); }
+  }
+
+  // ---------- lists ----------
+  const T = D.trades, M = D.missed;
+  let tab = 'T', fRes = 'all', view = T.slice(), cur = 0;
+  const years = (arr, f) => [...new Set(arr.map(f))].sort();
+  $('fYear').insertAdjacentHTML('beforeend', years(T, t => t.tEntry.slice(0, 4)).map(y => `<option value="${y}">${y}</option>`).join(''));
+  $('fYearS').insertAdjacentHTML('beforeend', years(M, t => t.tPA.slice(0, 4)).map(y => `<option value="${y}">${y}</option>`).join(''));
+  const reasons = [...new Map(M.map(m => [m.code, m.reason])).entries()];
+  $('fReason').insertAdjacentHTML('beforeend', reasons.map(([c, r]) => `<option value="${c}">${esc(r)} (${M.filter(m => m.code === c).length})</option>`).join(''));
+  $('tabT').textContent = `ไม้ที่เข้า (${T.length})`; $('tabS').textContent = `ครบทุกขั้นแต่ไม่เข้า (${M.length})`;
+
+  function applyFilters(keepKey) {
+    if (tab === 'T') {
+      const side = $('fSide').value, yr = $('fYear').value;
+      view = T.filter(t => (fRes === 'all' || (fRes === 'win' ? t.R > 0.05 : t.R <= 0.05)) && (side === 'all' || t.dir === side) && (yr === 'all' || t.tEntry.startsWith(yr)));
+    } else {
+      const rs = $('fReason').value, yr = $('fYearS').value;
+      view = M.filter(m => (rs === 'all' || String(m.code) === rs) && (yr === 'all' || m.tPA.startsWith(yr)));
+    }
+    $('count').textContent = `แสดง ${view.length} จาก ${(tab === 'T' ? T : M).length} รายการ`;
+    $('list').innerHTML = view.map((t, i) => tab === 'T' ? `<li><button type="button" data-i="${i}">
+        <span class="stripe" style="background:var(--${cls(t)})"></span>
+        <span class="li-main"><span class="t">#${t.id} · ${t.tEntry.slice(0, 10)}<span class="badge" data-k="${t.key}" hidden></span></span>
+        <span class="m">${t.dir} · โซน ${t.zone} · ${t.kz} · ${exitText[t.exit]}</span></span>
+        <span class="r ${t.R > 0.05 ? 'pos' : (t.R < -0.05 ? 'neg' : 'zero')}">${fmtR(t.R)}</span></button></li>`
+      : `<li><button type="button" data-i="${i}">
+        <span class="stripe" style="background:var(--be)"></span>
+        <span class="li-main"><span class="t">${t.tPA}<span class="badge" data-k="${t.key}" hidden></span></span>
+        <span class="m">${t.dir} · โซน ${t.zone} · ${esc(t.reason)}</span></span><span></span></button></li>`).join('');
+    renderListBadges();
+    const idx = keepKey ? view.findIndex(t => t.key === keepKey) : 0;
+    show(idx < 0 ? 0 : idx);
+  }
+  function renderListBadges() {
+    const cnt = {}; marks.forEach(m => { cnt[m.item] = (cnt[m.item] || 0) + 1; });
+    document.querySelectorAll('.badge[data-k]').forEach(b => { const n = cnt[b.dataset.k] || 0; b.hidden = !n; b.textContent = n; });
+  }
+  function setTab(tb, keepKey) {
+    tab = tb; $('tabT').setAttribute('aria-selected', tb === 'T'); $('tabS').setAttribute('aria-selected', tb === 'S');
+    $('filtersT').hidden = tb !== 'T'; $('filtersS').hidden = tb !== 'S'; applyFilters(keepKey);
+  }
+  $('tabT').addEventListener('click', () => setTab('T')); $('tabS').addEventListener('click', () => setTab('S'));
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    fRes = b.dataset.res; applyFilters();
+  }));
+  ['fSide', 'fYear', 'fReason', 'fYearS'].forEach(id => $(id).addEventListener('change', () => applyFilters()));
+  $('list').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (b) show(+b.dataset.i); });
+  $('prev').addEventListener('click', () => show(cur - 1)); $('next').addEventListener('click', () => show(cur + 1));
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('select, input, textarea')) return;
+    if (e.key === 'ArrowLeft') show(cur - 1); else if (e.key === 'ArrowRight') show(cur + 1);
+  });
+
+  // ---------- chart ----------
+  let chart = null, cs = null, curItem = null;
+  function draw(t) {
+    const el = $('chart');
+    if (chart) { chart.remove(); chart = null; cs = null; }
+    if (!window.LightweightCharts) { el.textContent = 'โหลดไลบรารีกราฟไม่สำเร็จ'; return; }
+    const C = { bg: css('--surface'), fg: css('--muted'), line: css('--line'), up: css('--up'), down: css('--down'),
+      gold: css('--gold'), entry: css('--entry'), win: css('--win'), loss: css('--loss'), muted: css('--muted') };
+    chart = LightweightCharts.createChart(el, { autoSize: true,
+      layout: { background: { type: 'solid', color: C.bg }, textColor: C.fg, fontFamily: css('--mono') },
+      grid: { vertLines: { color: C.line }, horzLines: { color: C.line } },
+      rightPriceScale: { borderColor: C.line }, timeScale: { borderColor: C.line, timeVisible: true, secondsVisible: false },
+      crosshair: { mode: 0 }, localization: { priceFormatter: p => p.toFixed(2) } });
+    cs = chart.addCandlestickSeries({ upColor: C.up, downColor: C.down, borderVisible: false, wickUpColor: C.up, wickDownColor: C.down, priceLineVisible: false, lastValueVisible: false });
+    cs.setData(t.bars.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4] })));
+    const pl = (price, color, style, title, w) => cs.createPriceLine({ price, color, lineWidth: w || 1, lineStyle: style, axisLabelVisible: true, title });
+    const buy = t.dir === 'Buy', m = t.mk;
+    pl(t.lvl, C.gold, 2, 'โซน ' + t.zone, 2);
+    let mk;
+    if (tab === 'T') {
+      pl(t.sl, C.loss, 0, 'SL'); pl(t.entry, C.entry, 0, 'Entry');
+      if (t.tp2 !== t.tp1) { pl(t.tp1, C.win, 1, 'TP1'); pl(t.tp2, C.win, 0, 'TP2', 2); } else pl(t.tp1, C.win, 0, 'TP', 2);
+      const seg = (a, b, v, color, style) => { if (a == null || b == null) return;
+        const s = chart.addLineSeries({ color, lineWidth: 1, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        s.setData(t.bars.filter(x => x[0] >= Math.min(a, b) && x[0] <= Math.max(a, b)).map(x => ({ time: x[0], value: v }))); };
+      seg(m.mssA, m.mss, t.mss, C.muted, 0); seg(m.fvg, m.exit, t.zt, C.entry, 2); seg(m.fvg, m.exit, t.zb, C.entry, 2);
+      mk = [{ time: m.sweep, position: buy ? 'belowBar' : 'aboveBar', color: C.gold, shape: buy ? 'arrowUp' : 'arrowDown', text: 'Sweep' },
+        { time: m.mss, position: buy ? 'aboveBar' : 'belowBar', color: C.muted, shape: 'circle', text: 'MSS' },
+        { time: m.entry, position: buy ? 'belowBar' : 'aboveBar', color: C.entry, shape: buy ? 'arrowUp' : 'arrowDown', text: 'PA → เข้า' }];
+      if (m.tp1 != null && t.exit !== 'TP') mk.push({ time: m.tp1, position: buy ? 'aboveBar' : 'belowBar', color: C.win, shape: 'square', text: 'TP1' });
+      const lossSide = (t.exit === 'SL') === buy;
+      mk.push({ time: m.exit, position: lossSide ? 'belowBar' : 'aboveBar', color: t.exit === 'SL' ? C.loss : C.win, shape: 'square', text: exitText[t.exit] });
+    } else {
+      mk = [{ time: m.sweep, position: buy ? 'belowBar' : 'aboveBar', color: C.gold, shape: buy ? 'arrowUp' : 'arrowDown', text: 'Sweep' },
+        { time: m.pa, position: buy ? 'belowBar' : 'aboveBar', color: C.muted, shape: 'circle', text: 'PA (ไม่ได้เข้า)' }];
+    }
+    mk.sort((a, b) => a.time - b.time); cs.setMarkers(mk);
+    chart.timeScale().fitContent();
+    chart.timeScale().subscribeVisibleLogicalRangeChange(() => requestAnimationFrame(drawMarks));
+    setTimeout(drawMarks, 60);
+  }
+
+  // ---------- drawing overlay ----------
+  const ov = $('ov'); let drawing = false, drag = null;
+  $('drawBtn').addEventListener('click', () => {
+    drawing = !drawing; $('drawBtn').setAttribute('aria-pressed', drawing); ov.classList.toggle('drawing', drawing);
+    $('drawBtn').textContent = drawing ? '◯ กำลังวง (กดเพื่อหยุด)' : '◯ วงบนกราฟ';
+  });
+  const curBars = () => curItem ? curItem.bars : [];
+  function xToTime(x) {
+    const lg = chart.timeScale().coordinateToLogical(x); const b = curBars(); if (lg == null || !b.length) return null;
+    return b[Math.max(0, Math.min(b.length - 1, Math.round(lg)))][0];
+  }
+  function timeToX(tm) {
+    const b = curBars(); let i = b.findIndex(x => x[0] >= tm); if (i < 0) i = b.length - 1;
+    return chart.timeScale().logicalToCoordinate(i);
+  }
+  const svgNS = 'http://www.w3.org/2000/svg';
+  function ellipse(x1, y1, x2, y2, color, label, dashed) {
+    const e = document.createElementNS(svgNS, 'ellipse');
+    e.setAttribute('cx', (x1 + x2) / 2); e.setAttribute('cy', (y1 + y2) / 2);
+    e.setAttribute('rx', Math.max(4, Math.abs(x2 - x1) / 2)); e.setAttribute('ry', Math.max(4, Math.abs(y2 - y1) / 2));
+    e.setAttribute('fill', 'none'); e.setAttribute('stroke', color); e.setAttribute('stroke-width', '2.5');
+    if (dashed) e.setAttribute('stroke-dasharray', '5 4');
+    ov.appendChild(e);
+    if (label) { const tx = document.createElementNS(svgNS, 'text'); tx.setAttribute('x', Math.min(x1, x2)); tx.setAttribute('y', Math.min(y1, y2) - 5);
+      tx.setAttribute('fill', color); tx.setAttribute('font-size', '12'); tx.setAttribute('font-weight', '600'); tx.setAttribute('font-family', css('--font'));
+      tx.textContent = label; ov.appendChild(tx); }
+  }
+  function drawMarks() {
+    while (ov.firstChild) ov.removeChild(ov.firstChild);
+    if (!chart || !cs || !curItem) return;
+    marks.filter(m => m.item === curItem.key).forEach(m => {
+      const x1 = timeToX(m.t1), x2 = timeToX(m.t2), y1 = cs.priceToCoordinate(m.p1), y2 = cs.priceToCoordinate(m.p2);
+      if ([x1, x2, y1, y2].some(v => v == null)) return;
+      const tg = TAGS[m.tag] || TAGS.other;
+      ellipse(x1, y1, x2, y2, css(tg[1]), tg[0] + (m.note ? ': ' + m.note.slice(0, 40) : ''));
+    });
+    if (drag && drag.x2 != null) { const tg = TAGS[$('tag').value]; ellipse(drag.x1, drag.y1, drag.x2, drag.y2, css(tg[1]), '', true); }
+  }
+  const pos = (e) => { const r = ov.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  ov.addEventListener('pointerdown', e => { if (!drawing) return; const [x, y] = pos(e); drag = { x1: x, y1: y, x2: null, y2: null }; ov.setPointerCapture(e.pointerId); e.preventDefault(); });
+  ov.addEventListener('pointermove', e => { if (!drag) return; const [x, y] = pos(e); drag.x2 = x; drag.y2 = y; drawMarks(); });
+  ov.addEventListener('pointerup', async e => {
+    if (!drag) return; const d = drag; drag = null;
+    if (d.x2 == null || Math.abs(d.x2 - d.x1) + Math.abs(d.y2 - d.y1) < 8) { drawMarks(); return; }
+    const t1 = xToTime(Math.min(d.x1, d.x2)), t2 = xToTime(Math.max(d.x1, d.x2));
+    const pA = cs.coordinateToPrice(d.y1), pB = cs.coordinateToPrice(d.y2);
+    if (t1 == null || pA == null || pB == null) { drawMarks(); return; }
+    const it = curItem;
+    await addMark({ item: it.key, kind: tab === 'T' ? 'trade' : 'missed', tag: $('tag').value, note: $('markNote').value.trim().slice(0, 200),
+      t1, t2, p1: +Math.max(pA, pB).toFixed(2), p2: +Math.min(pA, pB).toFixed(2), tf: it.tf,
+      ctx: tab === 'T' ? { dir: it.dir, zone: it.zone, entry: it.entry, sl: it.sl, tp1: it.tp1, tp2: it.tp2, tEntry: it.tEntry }
+                       : { dir: it.dir, zone: it.zone, lvl: it.lvl, reason: it.reason, tPA: it.tPA },
+      at: Date.now() });
+    $('markNote').value = '';
+  });
+  new ResizeObserver(() => requestAnimationFrame(drawMarks)).observe($('chart'));
+
+  const fmtTh = (s) => { const d = new Date(s * 1000); const p = (n) => String(n).padStart(2, '0');
+    return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`; };
+  function renderMarkList() {
+    if (!curItem) return;
+    const mine = marks.filter(m => m.item === curItem.key).sort((a, b) => (a.at || 0) - (b.at || 0));
+    $('markCount').textContent = mine.length ? `(${mine.length})` : '';
+    $('marks').innerHTML = mine.length ? mine.map(m => { const tg = TAGS[m.tag] || TAGS.other;
+      return `<li><span class="dot" style="background:var(${tg[1]})"></span><span><b>${tg[0]}</b>${m.note ? ' — ' + esc(m.note) : ''}<br>
+        <small>${fmtTh(m.t1)} → ${fmtTh(m.t2)} · ราคา ${m.p2.toFixed(2)}–${m.p1.toFixed(2)}</small></span>
+        ${canWrite || !db ? `<button type="button" data-del="${m.id}">ลบ</button>` : '<span></span>'}</li>`; }).join('')
+      : '<li class="empty-marks">ยังไม่ได้วง · กด "วงบนกราฟ" แล้วลากบนกราฟตรงที่ต้องแก้</li>';
+  }
+  $('marks').addEventListener('click', e => { const b = e.target.closest('button[data-del]'); if (b) delMark(b.dataset.del); });
+  function showNote() { if (!curItem) return; const n = notes[curItem.key]; if (document.activeElement !== $('itemNote')) $('itemNote').value = n ? n.text || '' : ''; }
+  $('saveNote').addEventListener('click', async () => {
+    if (!curItem) return; const text = $('itemNote').value.trim().slice(0, 1500);
+    if (!(db && canWrite)) { notes[curItem.key] = { text }; setState('noteState', 'จำไว้ชั่วคราว (บันทึกถาวรไม่ได้ในมุมมองนี้)'); return; }
+    setState('noteState', 'กำลังบันทึก…');
+    try { await db.doc('notes/' + curItem.key).set({ item: curItem.key, text, at: Date.now() }); setState('noteState', 'บันทึกแล้ว'); }
+    catch (e) { setState('noteState', 'บันทึกไม่สำเร็จ'); }
+  });
+
+  // ---------- show one item ----------
+  function show(i) {
+    if (!view.length) { curItem = null; $('titleRow').textContent = 'ไม่มีรายการตามตัวกรองนี้'; if (chart) { chart.remove(); chart = null; } $('steps').innerHTML = ''; $('nums').innerHTML = ''; $('posInd').textContent = '0/0'; drawMarks(); return; }
+    cur = Math.max(0, Math.min(view.length - 1, i));
+    const t = view[cur], buy = t.dir === 'Buy'; curItem = t;
+    document.querySelectorAll('#list button').forEach((b, k) => { const on = k === cur; b.setAttribute('aria-current', on ? 'true' : 'false'); if (on) b.scrollIntoView({ block: 'nearest' }); });
+    $('posInd').textContent = `${cur + 1}/${view.length}`; $('prev').disabled = cur === 0; $('next').disabled = cur === view.length - 1;
+    const dn = buy ? 'ลง' : 'ขึ้น', over = buy ? 'เหนือ' : 'ใต้';
+    if (tab === 'T') {
+      const c = cls(t);
+      $('titleRow').innerHTML = `<strong>#${t.id}</strong><span class="pill ${buy ? 'buy' : 'sell'}">${t.dir}</span><span class="pill zone">โซน ${t.zone}</span><span class="pill res ${c}">${exitText[t.exit]} ${fmtR(t.R)}</span>`;
+      $('tfNote').textContent = `แท่งที่แสดง: M${t.tf}`;
+      $('steps').innerHTML = [
+        `<span class="tm">${t.tSweep}</span> ราคาแทง${dn}ผ่านโซน ${t.zone} ที่ <b>${t.lvl.toFixed(2)}</b> ไปถึง <b>${t.ext.toFixed(2)}</b> แล้วปิดกลับ = กวาด liquidity`,
+        `<span class="tm">${t.tMss}</span> แท่ง displacement ปิด${over} swing M1 ที่ <b>${t.mss.toFixed(2)}</b> = MSS`,
+        `เกิด FVG บน M1 ช่วง <b>${t.zb.toFixed(2)}–${t.zt.toFixed(2)}</b>`,
+        `<span class="tm">${t.tEntry}</span> ราคาย่อเข้า FVG + แท่งปฏิเสธ → เข้า ${t.dir} ที่ <b>${t.entry.toFixed(2)}</b> (Kill Zone ${t.kz}, NY ${t.nyEntry})`,
+        `SL <b>${t.sl.toFixed(2)}</b> พ้นโซน 1.5 ATR · TP1 <b>${t.tp1.toFixed(2)}</b> = swing ก่อนกลับตัว` + (t.tp2 !== t.tp1 ? ` · TP2 <b>${t.tp2.toFixed(2)}</b> = ขอบ dealing range` : ''),
+        `<span class="tm">${t.tExit}</span> ${exitText[t.exit]} ที่ <b>${t.xpx.toFixed(2)}</b> → <span class="${t.R > 0.05 ? 'pos' : (t.R < -0.05 ? 'neg' : 'zero')}">${fmtR(t.R)} (${t.pnl > 0 ? '+' : ''}$${t.pnl.toFixed(0)})</span>`
+      ].map(s => `<li>${s}</li>`).join('');
+      const rows = [['Entry', t.entry.toFixed(2)], ['Stop Loss', t.sl.toFixed(2)], ['ระยะ SL', '$' + t.risk.toFixed(2) + ' /oz'], ['TP1', t.tp1.toFixed(2) + `  (${t.rr1.toFixed(2)}R)`]];
+      if (t.tp2 !== t.tp1) rows.push(['TP2', t.tp2.toFixed(2) + `  (${t.rr2.toFixed(2)}R)`]);
+      rows.push(['ราคาออก', t.xpx.toFixed(2)], ['ผล', fmtR(t.R)], ['กำไร/ขาดทุน', (t.pnl > 0 ? '+$' : '−$') + Math.abs(t.pnl).toFixed(2)]);
+      $('nums').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+    } else {
+      $('titleRow').innerHTML = `<strong>ไม่ได้เข้า</strong><span class="pill ${buy ? 'buy' : 'sell'}">${t.dir}</span><span class="pill zone">โซน ${t.zone}</span>`;
+      $('tfNote').textContent = 'แท่งที่แสดง: M1';
+      $('steps').innerHTML = [
+        `<span class="tm">${t.tSweep}</span> ราคาแทง${dn}ผ่านโซน ${t.zone} ที่ <b>${t.lvl.toFixed(2)}</b> ไปถึง <b>${t.ext.toFixed(2)}</b>`,
+        `เกิด MSS + FVG + PA ปฏิเสธใน FVG ครบ`,
+        `<span class="tm">${t.tPA}</span> (NY ${t.nyPA}) EA ไม่เข้าเพราะ: <b>${esc(t.reason)}</b>`
+      ].map(s => `<li>${s}</li>`).join('');
+      $('nums').innerHTML = [['ฝั่ง', t.dir], ['โซน', t.zone + ' ' + t.lvl.toFixed(2)], ['จุดสุดของไส้', t.ext.toFixed(2)], ['เวลา PA (ไทย)', t.tPA]].map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+    }
+    draw(t); renderMarkList(); showNote(); setState('noteState', '');
+    try { history.replaceState(null, '', '#' + t.key); } catch (e) {}
+  }
+
+  const redraw = () => { if (curItem) draw(curItem); };
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw); } catch (e) {}
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  renderStats();
+  const h0 = (location.hash.match(/^#([TS]\d+)$/) || [])[1];
+  if (h0 && h0[0] === 'S') setTab('S', h0); else setTab('T', h0);
+  window.addEventListener('hashchange', () => {
+    const k = (location.hash.match(/^#([TS]\d+)$/) || [])[1]; if (!k || (curItem && curItem.key === k)) return;
+    if ((k[0] === 'S') !== (tab === 'S')) setTab(k[0], k); else { const i = view.findIndex(t => t.key === k); if (i >= 0) show(i); }
+  });
+})();
+</script>
