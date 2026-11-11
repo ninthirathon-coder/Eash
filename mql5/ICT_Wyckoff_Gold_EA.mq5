@@ -31,6 +31,12 @@ input bool   InpSkipNfpDay    = true;   // งดศุกร์แรกขอ�
 input string InpNoTradeDates  = "";     // วันงดเทรด เช่น 2026.12.16;2027.01.27 (FOMC)
 
 input group "=== สัญญาณ ==="
+input bool   InpUseModel2022  = true;   // 2022 Mentorship Model (กวาด -> MSS -> FVG)
+input bool   InpUseSilverBullet = false;// Silver Bullet: FVG แรกในชั่วโมงที่ชี้ไปทางเป้า
+input int    InpSb1Start      = 300;    // Silver Bullet #1 เริ่ม (ยาว 1 ชม., -1 = ปิด)
+input int    InpSb2Start      = 1000;   // Silver Bullet #2 เริ่ม
+input int    InpSb3Start      = 1400;   // Silver Bullet #3 เริ่ม
+input double InpSbTp1R        = 0.0;    // Silver Bullet: แบ่งปิดเมื่อกำไรกี่ R (0 = ไม่ใช้)
 input bool   InpUseBias       = true;   // ICT: เทรดตาม bias รายวันเท่านั้น
 input bool   InpUseIctLevels  = true;   // กวาด Asia / PDH-PDL / London
 input bool   InpUseSwingLevels= true;   // กวาดจุดสูง-ต่ำเก่าบน H1
@@ -71,6 +77,7 @@ input long   InpMagic         = 20261111;
 #define TAG_PD    3
 #define TAG_SWING 4
 #define TAG_WYCK  5
+#define TAG_SB    6
 
 struct SLevel
   {
@@ -112,6 +119,13 @@ double   g_tp2     = 0;       // ราคา'
 double   g_fvgLo   = 0;       // ราคา'
 int      g_expire  = 0;
 bool     g_be      = false;
+double   g_cancelAt = 0;      // ราคา' ที่ถ้าถึงก่อนเข้าให้ยกเลิกออเดอร์
+// Silver Bullet
+int      g_sbWin   = -1;      // นาทีเริ่มของชั่วโมงปัจจุบัน (-1 = นอกช่วง)
+bool     g_sbDone  = false;
+double   g_sbTg0[], g_sbTg1[]; // เป้า' ฝั่ง Buy / Sell
+MqlRates gh[];                // แท่ง H1
+int      g_hi      = 0;       // จำนวนแท่ง H1 ที่ปิดแล้วก่อนแท่งปัจจุบัน
 
 //+------------------------------------------------------------------+
 //| เวลา                                                              |
@@ -312,15 +326,19 @@ void AddHL(double &px[], int &tg[], const double price, const int tag)
    tg[k] = tag;
   }
 
-void SetupKillZone(const int i)
+// สภาพคล่องที่ยังไม่ถูกกวาด ณ แท่ง i (ราคาจริง) และจุดสูง/ต่ำของวันนี้ก่อนแท่ง i
+void CollectLiquidity(const int i, const bool withLon, double &highs[], int &htag[], double &lows[], int &ltag[], double &tH, double &tL)
   {
-   double highs[], lows[];
-   int    htag[], ltag[];
+   ArrayResize(highs, 0);
+   ArrayResize(lows, 0);
+   ArrayResize(htag, 0);
+   ArrayResize(ltag, 0);
    int asiaA = NyMod(InpAsiaStart), asiaB = NyMod(InpAsiaEnd);
    int lonA = NyMod(InpLondonStart), lonB = NyMod(InpLondonEnd);
    double aH = -DBL_MAX, aL = DBL_MAX, aaH = -DBL_MAX, aaL = DBL_MAX;   // Asia และหลัง Asia
    double lH = -DBL_MAX, lL = DBL_MAX, alH = -DBL_MAX, alL = DBL_MAX;   // London และหลัง London
-   double tH = -DBL_MAX, tL = DBL_MAX;                                  // ทั้งวันก่อนเข้า Kill Zone
+   tH = -DBL_MAX;                                                       // ทั้งวันก่อนแท่ง i
+   tL = DBL_MAX;
    bool hasAsia = false, hasLon = false;
    for(int k = i - 1; k >= 0; k--)
      {
@@ -360,7 +378,7 @@ void SetupKillZone(const int i)
       if(aL < aaL)
          AddHL(lows, ltag, aL, TAG_ASIA);
      }
-   if(g_kz == 2 && hasLon)
+   if(withLon && hasLon)
      {
       if(lH > alH)
          AddHL(highs, htag, lH, TAG_LON);
@@ -373,15 +391,14 @@ void SetupKillZone(const int i)
       AddHL(lows, ltag, g_pdl, TAG_PD);
 
    // --- แท่ง H1 ที่ปิดแล้วก่อนเข้า Kill Zone ---
-   MqlRates h[];
-   int hn = CopyRates(_Symbol, PERIOD_H1, 0, 300, h);
+   int hn = CopyRates(_Symbol, PERIOD_H1, 0, 300, gh);
    int hi = 0;                                   // จำนวนแท่ง H1 ที่ปิดแล้ว
    if(hn > 0)
      {
-      ArraySetAsSeries(h, false);
+      ArraySetAsSeries(gh, false);
       datetime hourStart = (datetime)(r[i].time - r[i].time % 3600);
       hi = hn;
-      while(hi > 0 && h[hi - 1].time >= hourStart)
+      while(hi > 0 && gh[hi - 1].time >= hourStart)
          hi--;
      }
    if(InpUseSwingLevels && hi >= InpSwingLookback)
@@ -389,30 +406,39 @@ void SetupKillZone(const int i)
       int a = hi - InpSwingLookback, nh = 0, nl = 0;
       for(int k = hi - 3; k >= a + 2; k--)
         {
-         if(nh < InpSwingMax && h[k].high > MathMax(MathMax(h[k - 2].high, h[k - 1].high), MathMax(h[k + 1].high, h[k + 2].high)))
+         if(nh < InpSwingMax && gh[k].high > MathMax(MathMax(gh[k - 2].high, gh[k - 1].high), MathMax(gh[k + 1].high, gh[k + 2].high)))
            {
             double mx = -DBL_MAX;
             for(int q = k + 1; q < hi; q++)
-               mx = MathMax(mx, h[q].high);
-            if(h[k].high > mx)
+               mx = MathMax(mx, gh[q].high);
+            if(gh[k].high > mx)
               {
-               AddHL(highs, htag, h[k].high, TAG_SWING);
+               AddHL(highs, htag, gh[k].high, TAG_SWING);
                nh++;
               }
            }
-         if(nl < InpSwingMax && h[k].low < MathMin(MathMin(h[k - 2].low, h[k - 1].low), MathMin(h[k + 1].low, h[k + 2].low)))
+         if(nl < InpSwingMax && gh[k].low < MathMin(MathMin(gh[k - 2].low, gh[k - 1].low), MathMin(gh[k + 1].low, gh[k + 2].low)))
            {
             double mn = DBL_MAX;
             for(int q = k + 1; q < hi; q++)
-               mn = MathMin(mn, h[q].low);
-            if(h[k].low < mn)
+               mn = MathMin(mn, gh[q].low);
+            if(gh[k].low < mn)
               {
-               AddHL(lows, ltag, h[k].low, TAG_SWING);
+               AddHL(lows, ltag, gh[k].low, TAG_SWING);
                nl++;
               }
            }
         }
      }
+   g_hi = hi;
+  }
+
+void SetupKillZone(const int i)
+  {
+   double highs[], lows[], tH, tL;
+   int    htag[], ltag[];
+   CollectLiquidity(i, g_kz == 2, highs, htag, lows, ltag, tH, tL);
+   int hi = g_hi;
    for(int si = 0; si < 2; si++)
      {
       int d = g_s[si].d;
@@ -442,24 +468,24 @@ void SetupKillZone(const int i)
       double rh = -DBL_MAX, rl = DBL_MAX, sum = 0;
       for(int k = a; k < hi; k++)
         {
-         rh = MathMax(rh, h[k].high);
-         rl = MathMin(rl, h[k].low);
-         sum += h[k].high - h[k].low;
+         rh = MathMax(rh, gh[k].high);
+         rl = MathMin(rl, gh[k].low);
+         sum += gh[k].high - gh[k].low;
         }
       double w = rh - rl;
-      bool ok = w >= InpWyMinWidth * sum / InpWyBars && MathAbs(h[hi - 1].close - h[a].close) <= InpWyMaxDrift * w;
+      bool ok = w >= InpWyMinWidth * sum / InpWyBars && MathAbs(gh[hi - 1].close - gh[a].close) <= InpWyMaxDrift * w;
       if(ok)
         {
          double upZone = rh - 0.25 * w, dnZone = rl + 0.25 * w;
          int ups = 0, dns = 0, state = 0;
          for(int k = a; k < hi; k++)
            {
-            if(h[k].high >= upZone && state != 1)
+            if(gh[k].high >= upZone && state != 1)
               {
                ups++;
                state = 1;
               }
-            else if(h[k].low <= dnZone && state != -1)
+            else if(gh[k].low <= dnZone && state != -1)
               {
                dns++;
                state = -1;
@@ -599,13 +625,22 @@ void TrySetup(SSide &s, const int i, const int endm)
      }
    tp1 = MathMin(MathMax(tp1, ent + risk), tp2);
 
+   PlaceOrder(d, ent, sl, tp1, tp2, fvgLo, g_kzEnd + InpOrderGrace, tp1, s.lv[s.lvl].tag);
+  }
+
+//+------------------------------------------------------------------+
+//| วางออเดอร์ (ราคาทุกตัวเป็นราคา' ของทิศ d)                            |
+//+------------------------------------------------------------------+
+bool PlaceOrder(const int d, const double ent, const double sl, const double tp1, const double tp2,
+                const double fvgLo, const int expire, const double cancelAt, const int tag)
+  {
    int    dg = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    double pEnt = NormalizeDouble(d * ent, dg), pSl = NormalizeDouble(d * sl, dg), pTp = NormalizeDouble(d * tp2, dg);
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK), bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double lot = CalcLot(d == 1 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL, pEnt, pSl);
    if(lot <= 0)
-      return;
-   string cm = "ICTWY " + IntegerToString(s.lv[s.lvl].tag);
+      return false;
+   string cm = "ICTWY " + IntegerToString(tag);
    bool ok;
    if(d == 1)
       ok = (ask <= pEnt) ? trade.Buy(lot, _Symbol, 0, pSl, pTp, cm) : trade.BuyLimit(lot, pEnt, _Symbol, pSl, pTp, ORDER_TIME_GTC, 0, cm);
@@ -614,14 +649,104 @@ void TrySetup(SSide &s, const int i, const int endm)
    if(!ok)
      {
       Print("วางออเดอร์ไม่สำเร็จ: ", trade.ResultRetcodeDescription());
-      return;
+      return false;
      }
-   g_dir    = d;
-   g_tp1    = tp1;
-   g_tp2    = tp2;
-   g_fvgLo  = fvgLo;
-   g_expire = g_kzEnd + InpOrderGrace;
-   g_be     = false;
+   g_dir      = d;
+   g_tp1      = tp1;
+   g_tp2      = tp2;
+   g_fvgLo    = fvgLo;
+   g_expire   = expire;
+   g_cancelAt = cancelAt;
+   g_be       = false;
+   return true;
+  }
+
+//+------------------------------------------------------------------+
+//| Silver Bullet: FVG แรกที่เกิดในชั่วโมงและชี้ไปทางเป้าสภาพคล่อง         |
+//+------------------------------------------------------------------+
+void SilverBullet(const int i, const int mod, const int endm)
+  {
+   int win = -1;
+   int st[3];
+   st[0] = InpSb1Start;
+   st[1] = InpSb2Start;
+   st[2] = InpSb3Start;
+   for(int k = 0; k < 3; k++)
+      if(st[k] >= 0 && mod >= NyMod(st[k]) && mod < NyMod(st[k]) + 60)
+         win = NyMod(st[k]);
+   if(win != g_sbWin)
+     {
+      g_sbWin  = win;
+      g_sbDone = false;
+      if(win >= 0)
+        {
+         double highs[], lows[], tH, tL;
+         int    htag[], ltag[];
+         CollectLiquidity(i, mod >= NyMod(InpLondonEnd), highs, htag, lows, ltag, tH, tL);
+         int nh = ArraySize(highs), nl = ArraySize(lows);
+         ArrayResize(g_sbTg0, nh + 1);
+         ArrayResize(g_sbTg1, nl + 1);
+         for(int k = 0; k < nh; k++)
+            g_sbTg0[k] = highs[k];
+         g_sbTg0[nh] = tH;
+         for(int k = 0; k < nl; k++)
+            g_sbTg1[k] = -lows[k];
+         g_sbTg1[nl] = -tL;
+         ArraySort(g_sbTg0);
+         ArraySort(g_sbTg1);
+        }
+     }
+   if(win < 0 || g_sbDone || i < 22 || FindPending() > 0 || FindPosition() > 0)
+      return;
+   if(ModOf(T7(r[i - 1].time)) < win || endm >= win + 60)
+      return;                                    // แท่งกลางของ FVG ต้องอยู่ในชั่วโมง
+   if(endm >= NyMod(InpNewsStart) && endm < NyMod(InpNewsEnd))
+      return;
+   int trades, losses;
+   DayCounters(trades, losses);
+   if(trades >= InpMaxTradesDay || losses >= InpMaxLossesDay)
+      return;
+   double A = 0;
+   for(int k = i - 22; k < i - 2; k++)
+      A += r[k].high - r[k].low;
+   A /= 20;
+   for(int si = 0; si < 2; si++)
+     {
+      int d = (si == 0) ? 1 : -1;
+      if(InpUseBias && g_bias != d)
+         continue;
+      double gLo = Hd(d, r[i - 2]), gHi = Ld(d, r[i]);
+      if(gHi - gLo < InpMinFvg * A)
+         continue;
+      double ent = InpEntryCE ? (gLo + gHi) / 2 : gHi;
+      double sl = Ld(d, r[i - 2]) - InpSlBuffer * A;   // หลังแท่งที่ 1 ของช่อง
+      double risk = ent - sl;
+      if(risk < InpMinRisk * A || risk > InpMaxRisk * A)
+         continue;
+      double dayHi = -DBL_MAX;
+      for(int k = i; k >= 0 && DayOf(T7(r[k].time)) == g_day; k--)
+         dayHi = MathMax(dayHi, Hd(d, r[k]));
+      double tp2 = 0;
+      bool has = false;
+      int nt = (d == 1) ? ArraySize(g_sbTg0) : ArraySize(g_sbTg1);
+      for(int k = 0; k < nt && !has; k++)
+        {
+         double tgt = (d == 1) ? g_sbTg0[k] : g_sbTg1[k];
+         if(tgt >= dayHi && tgt - ent >= InpMinRR * risk)
+           {
+            tp2 = tgt;
+            has = true;
+           }
+        }
+      if(!has)
+         continue;
+      double tp1 = (InpSbTp1R > 0) ? MathMin(ent + InpSbTp1R * risk, tp2) : tp2;
+      if(PlaceOrder(d, ent, sl, tp1, tp2, gLo, win + 60, tp2, TAG_SB))
+        {
+         g_sbDone = true;
+         return;
+        }
+     }
   }
 
 //+------------------------------------------------------------------+
@@ -637,7 +762,7 @@ void ManageOnTick()
      {
       if(FindPending() == 0)
          g_dir = 0;                              // ไม้ปิดไปแล้ว
-      else if(px >= g_tp1)
+      else if(px >= g_cancelAt)
          DeletePending();                        // ราคาไปถึงเป้าก่อนย่อมาเข้า
       return;
      }
@@ -687,6 +812,7 @@ void OnNewBar()
      {
       g_day = day;
       g_kz  = 0;
+      g_sbWin = -1;
       ResetSide(g_s[0]);
       ResetSide(g_s[1]);
       DeletePending();
@@ -728,7 +854,9 @@ void OnNewBar()
          SetupKillZone(i);
         }
      }
-   if(g_kz == 0)
+   if(InpUseSilverBullet)
+      SilverBullet(i, mod, endm);
+   if(g_kz == 0 || !InpUseModel2022)
       return;
 
    // ---------- ติดตามการกวาดสภาพคล่อง / MSS ----------

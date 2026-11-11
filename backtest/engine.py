@@ -33,6 +33,10 @@ class Params:
     use_bias: bool = True           # ICT: เทรดตาม bias รายวันเท่านั้น
     use_ict_levels: bool = True     # กวาด Asia / PDH-PDL / London
     use_wyckoff: bool = True        # กวาดขอบกรอบ H1 (Spring / UTAD)
+    use_model_2022: bool = True     # 2022 Mentorship Model (กวาด -> MSS -> FVG)
+    use_silver_bullet: bool = False # Silver Bullet: FVG แรกในชั่วโมง
+    sb_windows: tuple = ((600, 660), (1020, 1080), (1260, 1320))  # 03-04, 10-11, 14-15 NY
+    sb_tp1_r: float = 0.0           # แบ่งปิด/เลื่อน SL เท่าทุนเมื่อกำไรกี่ R (0 = ไม่ใช้)
     use_swing_levels: bool = True   # จุดสูง/ต่ำเก่าบน H1 ที่ยังไม่ถูกกวาด
     swing_lookback: int = 48
     swing_max: int = 2
@@ -195,6 +199,9 @@ def run(data: Data, p: Params):
     day_ok = False
     kz = None
     kz_end = 0
+    sb_win = None
+    sb_done = False
+    sb_tg = {}
     day_start_i = 0
     m1o, m1h, m1l, m1c, m1t = m1["open"], m1["high"], m1["low"], m1["close"], m1["time"]
 
@@ -214,6 +221,60 @@ def run(data: Data, p: Params):
             if pos["pnl"] < 0:
                 day_losses += 1
             pos = None
+
+    def liq(i, day, d0, with_lon):
+        """สภาพคล่องที่ยังไม่ถูกกวาด ณ แท่ง i: คืน (highs, lows, จุดสูงวันนี้, จุดต่ำวันนี้, จำนวนแท่ง H1 ที่ปิดแล้ว)"""
+        b, pdh, pdl = bias[day]
+        sl_ = slice(d0, i)  # แท่งของวันนี้ก่อนเข้า KZ
+        dm = MOD[sl_]
+
+        def rng(a, b_):
+            m = (dm >= a) & (dm < b_)
+            if not m.any():
+                return None
+            return H[sl_][m].max(), L[sl_][m].min()
+
+        def after(a):
+            m = dm >= a
+            if not m.any():
+                return -np.inf, np.inf
+            return H[sl_][m].max(), L[sl_][m].min()
+
+        highs, lows = [], []  # (price, tag) ที่ยังไม่ถูกกวาด
+        r = rng(*p.asia)
+        if r:
+            ah, al = after(p.asia[1])
+            if r[0] > ah:
+                highs.append((r[0], "ASIA"))
+            if r[1] < al:
+                lows.append((r[1], "ASIA"))
+        if with_lon:
+            r = rng(*p.london)
+            if r:
+                ah, al = after(p.london[1])
+                if r[0] > ah:
+                    highs.append((r[0], "LON"))
+                if r[1] < al:
+                    lows.append((r[1], "LON"))
+        th, tl = (H[sl_].max(), L[sl_].min()) if i > d0 else (-np.inf, np.inf)
+        if pdh > th:
+            highs.append((pdh, "PD"))
+        if pdl < tl:
+            lows.append((pdl, "PD"))
+        hi = np.searchsorted(h1t, T5[i].astype("datetime64[h]"))
+        if p.use_swing_levels and hi >= p.swing_lookback:
+            hh, ll = h1h[hi - p.swing_lookback:hi], h1l[hi - p.swing_lookback:hi]
+            nh = nl = 0
+            for k in range(len(hh) - 3, 1, -1):  # swing H1 (2 แท่งสองข้าง) ที่ยังไม่ถูกกวาด
+                if nh < p.swing_max and hh[k] > max(hh[k - 2], hh[k - 1], hh[k + 1], hh[k + 2]) \
+                        and hh[k] > hh[k + 1:].max():
+                    highs.append((hh[k], "SWING"))
+                    nh += 1
+                if nl < p.swing_max and ll[k] < min(ll[k - 2], ll[k - 1], ll[k + 1], ll[k + 2]) \
+                        and ll[k] < ll[k + 1:].min():
+                    lows.append((ll[k], "SWING"))
+                    nl += 1
+        return highs, lows, th, tl, hi
 
     for i in range(n):
         mod = MOD[i]
@@ -250,7 +311,7 @@ def run(data: Data, p: Params):
                         if l - xa <= pos["sl"]:
                             close_pos(pos["sl"], m1t[k], "SL")
                         continue
-                    if h - xa >= pending["tp1"]:
+                    if h - xa >= (pending["tp2"] if pending["tag"] == "SB" else pending["tp1"]):
                         pending = None  # ราคาไปถึงเป้าก่อนย่อมาเข้า
                     continue
                 # มีสถานะ
@@ -298,56 +359,8 @@ def run(data: Data, p: Params):
                 s.reset()
             if kz is not None:
                 kz_start, kz_end = (p.london if kz == "LON" else p.nyam)
-                b, pdh, pdl = bias[cur_day]
-                sl_ = slice(day_start_i, i)  # แท่งของวันนี้ก่อนเข้า KZ
-                dm = MOD[sl_]
-
-                def rng(a, b_):
-                    m = (dm >= a) & (dm < b_)
-                    if not m.any():
-                        return None
-                    return H[sl_][m].max(), L[sl_][m].min()
-
-                def after(a):
-                    m = dm >= a
-                    if not m.any():
-                        return -np.inf, np.inf
-                    return H[sl_][m].max(), L[sl_][m].min()
-
-                highs, lows = [], []  # (price, tag) ที่ยังไม่ถูกกวาด
-                r = rng(*p.asia)
-                if r:
-                    ah, al = after(p.asia[1])
-                    if r[0] > ah:
-                        highs.append((r[0], "ASIA"))
-                    if r[1] < al:
-                        lows.append((r[1], "ASIA"))
-                if kz == "NY":
-                    r = rng(*p.london)
-                    if r:
-                        ah, al = after(p.london[1])
-                        if r[0] > ah:
-                            highs.append((r[0], "LON"))
-                        if r[1] < al:
-                            lows.append((r[1], "LON"))
-                th, tl = (H[sl_].max(), L[sl_].min()) if i > day_start_i else (-np.inf, np.inf)
-                if pdh > th:
-                    highs.append((pdh, "PD"))
-                if pdl < tl:
-                    lows.append((pdl, "PD"))
-                hi = np.searchsorted(h1t, T5[i].astype("datetime64[h]"))
-                if p.use_swing_levels and hi >= p.swing_lookback:
-                    hh, ll = h1h[hi - p.swing_lookback:hi], h1l[hi - p.swing_lookback:hi]
-                    nh = nl = 0
-                    for k in range(len(hh) - 3, 1, -1):  # swing H1 (2 แท่งสองข้าง) ที่ยังไม่ถูกกวาด
-                        if nh < p.swing_max and hh[k] > max(hh[k - 2], hh[k - 1], hh[k + 1], hh[k + 2]) \
-                                and hh[k] > hh[k + 1:].max():
-                            highs.append((hh[k], "SWING"))
-                            nh += 1
-                        if nl < p.swing_max and ll[k] < min(ll[k - 2], ll[k - 1], ll[k + 1], ll[k + 2]) \
-                                and ll[k] < ll[k + 1:].min():
-                            lows.append((ll[k], "SWING"))
-                            nl += 1
+                b = bias[cur_day][0]
+                highs, lows, _, _, hi = liq(i, cur_day, day_start_i, kz == "NY")
                 for d, s in sides.items():
                     mine = lows if d == 1 else highs      # ฝั่งที่จะถูกกวาด
                     opp = highs if d == 1 else lows       # เป้าหมาย
@@ -362,7 +375,53 @@ def run(data: Data, p: Params):
                         mid = (rl + rh) / 2
                         sides[1].levels.append([rl, "WYCK", mid, rh, False])
                         sides[-1].levels.append([-rh, "WYCK", -mid, -rl, False])
-        if kz is None:
+        # ---------- Silver Bullet: FVG แรกในชั่วโมงที่ชี้ไปทางเป้า ----------
+        if p.use_silver_bullet:
+            win = None
+            for w in p.sb_windows:
+                if w[0] <= mod < w[1]:
+                    win = w
+            if win != sb_win:
+                sb_win, sb_done = win, False
+                if win is not None:
+                    highs, lows, th, tl, _ = liq(i, cur_day, day_start_i, mod >= p.london[1])
+                    sb_tg = {1: sorted([x[0] for x in highs] + [th]), -1: sorted([-x[0] for x in lows] + [-tl])}
+            if (win is not None and not sb_done and pending is None and pos is None and i >= 22
+                    and MOD[i - 1] >= win[0] and endm < win[1]
+                    and day_trades < p.max_trades_day and day_losses < p.max_losses_day
+                    and not (p.news_block[0] <= endm < p.news_block[1])):
+                b = bias[cur_day][0]
+                A = rng5[i - 22:i - 2].mean()
+                for d in (1, -1):
+                    if p.use_bias and b != d:
+                        continue
+                    Hd, Ld, Cd, Od = X[d]
+                    g_lo, g_hi = Hd[i - 2], Ld[i]
+                    if g_hi - g_lo < p.min_fvg * A:
+                        continue
+                    ent = (g_lo + g_hi) / 2 if p.entry_ce else g_hi
+                    sl = Ld[i - 2] - p.sl_buffer * A      # หลังแท่งที่ 1 ของช่อง
+                    risk = ent - sl
+                    if risk < p.min_risk * A or risk > p.max_risk * A:
+                        continue
+                    day_hi = Hd[day_start_i:i + 1].max()
+                    tp2 = None
+                    for tgt in sb_tg[d]:
+                        if tgt >= day_hi and tgt - ent >= p.min_rr * risk:
+                            tp2 = tgt
+                            break
+                    if tp2 is None:
+                        continue
+                    lot = np.floor(equity * p.risk_pct / 100 / (risk * OZ_PER_LOT) * 100 + 1e-9) / 100
+                    if lot < 0.01:
+                        continue
+                    tp1 = min(ent + p.sb_tp1_r * risk, tp2) if p.sb_tp1_r > 0 else tp2
+                    pending = dict(d=d, entry=ent, sl=sl, tp1=tp1, tp2=tp2, lot=lot, fvg_lo=g_lo, expire=win[1],
+                                   tag="SB", kz=f"SB{win[0]}", risk_usd=risk * OZ_PER_LOT * lot + p.commission * lot)
+                    sb_done = True
+                    break
+
+        if kz is None or not p.use_model_2022:
             continue
 
         # ---------- ติดตามการกวาด / MSS ----------

@@ -26,6 +26,10 @@ VARIANTS = [
     ("เฉพาะ Wyckoff Spring/UTAD", dict(use_ict_levels=False, use_swing_levels=False)),
     ("เฉพาะ London Kill Zone", dict(trade_nyam=False)),
     ("เฉพาะ New York AM Kill Zone", dict(trade_london=False)),
+    ("Silver Bullet อย่างเดียว", dict(use_model_2022=False, use_silver_bullet=True)),
+    ("Silver Bullet ไม่ใช้ bias", dict(use_model_2022=False, use_silver_bullet=True, use_bias=False)),
+    ("Silver Bullet ไม่ปิดเมื่อทะลุ FVG", dict(use_model_2022=False, use_silver_bullet=True, exit_on_fvg_fail=False)),
+    ("2022 Model + Silver Bullet", dict(use_silver_bullet=True)),
 ]
 
 
