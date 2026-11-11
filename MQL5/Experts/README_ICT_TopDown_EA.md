@@ -110,3 +110,11 @@ v1.31 ตั้งค่าเริ่มต้น `InpMaxSLZoneATR = 2.5` ต�
 
 SL ชิดไส้ + RR 3: กำไรส่วนใหญ่มาจากปี 2014-2016 และปี 2021-2023 ติดลบทุกปี (SL โซน: สม่ำเสมอกว่าในช่วงหลัง)
 **ชุดตั้งค่า "SL สั้น"**: `InpSLMode = TD_SL_WICK`, `InpSLWickATR1 = 1.0`, `InpTPMode = TD_TP_RR`, `InpFixedRR = 3.0`, `InpMinRR = 0.5`
+
+## v1.41: หาเวลานิวยอร์กอัตโนมัติ (รองรับเปลี่ยนเวลาตามฤดู)
+ทดสอบบน MT5 (MetaQuotes-Demo, ม.ค.-พ.ย. 2026, tick จริง): 2 ไม้ ถึง TP ทั้งคู่ ยอด $10,000 -> $12,443
+ราคา/จุดเข้าตรงกับ backtest แต่เวลาเร็วกว่า 1 ชม. เพราะ MetaQuotes-Demo ใช้ **GMT+2 ตลอดปี** (หน้าร้อน = NY+6 ไม่ใช่ +7)
+ทำให้พลาด 2 ไม้ที่เกิดต้น NY Kill Zone (~07:30 NY) เพราะ EA คิดว่าเป็น 06:30
+- `InpTimeMode = TD_TIME_AUTO` (ค่าเริ่มต้น): ใช้ `InpServerGMT` + `InpServerDST` แล้วคำนวณ DST ของนิวยอร์กเอง
+- MetaQuotes-Demo: `InpServerGMT = 2`, `InpServerDST = TD_DST_NONE` (ไฟล์ .set ใน `MQL5/Presets/` ตั้งไว้แล้ว)
+- โบรกส่วนใหญ่ (GMT+2 หน้าหนาว / +3 หน้าร้อน): `InpServerGMT = 2`, `InpServerDST = TD_DST_EU`

@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.40"
+#property version     "1.41"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -32,6 +32,19 @@ enum ENUM_TD_TP
    TD_TP_RR        = 1, // RR คงที่
    TD_TP_SWING_RR  = 2, // swing H1 ตัวแรกที่ให้ RR >= InpMinRR
    TD_TP_OPP_LIQ   = 3  // liquidity ฝั่งตรงข้ามที่ใกล้สุด (ยังไม่ถูกกวาด) ที่ให้ RR >= InpMinRR
+  };
+
+enum ENUM_TD_TIME
+  {
+   TD_TIME_AUTO   = 0, // อัตโนมัติ: จาก GMT offset ของโบรก + DST
+   TD_TIME_MANUAL = 1  // กำหนดเอง: InpServerMinusNY คงที่
+  };
+
+enum ENUM_TD_DST
+  {
+   TD_DST_NONE = 0, // เซิร์ฟเวอร์ไม่เปลี่ยนเวลาตามฤดู
+   TD_DST_EU   = 1, // เปลี่ยนตามยุโรป (GMT+2 หน้าหนาว / GMT+3 หน้าร้อน)
+   TD_DST_US   = 2  // เปลี่ยนตามสหรัฐ
   };
 
 enum ENUM_TD_SL
@@ -57,7 +70,10 @@ input bool            InpUseH4Zones       = true;       // Swing H4
 input bool            InpUsePDZones       = true;       // PDH / PDL
 input int             InpZoneSwingStrength = 3;         // ความแรง swing ของโซน (แท่งซ้าย/ขวา)
 input ENUM_TD_BIAS    InpBias             = TD_BIAS_NONE; // ตัวกรองเทรนด์
-input int             InpServerMinusNY    = 7;          // เวลาเซิร์ฟเวอร์ - เวลา NY (ชม.)
+input ENUM_TD_TIME    InpTimeMode         = TD_TIME_AUTO; // วิธีหาเวลานิวยอร์ก
+input int             InpServerGMT        = 2;          // อัตโนมัติ: GMT offset ของโบรกช่วงหน้าหนาว (ชม.)
+input ENUM_TD_DST     InpServerDST        = TD_DST_EU;  // อัตโนมัติ: โบรกเปลี่ยนเวลาตามฤดูแบบไหน
+input int             InpServerMinusNY    = 7;          // กำหนดเอง: เวลาเซิร์ฟเวอร์ - เวลา NY (ชม.)
 
 input group "=== ยืนยันบน M1 ==="
 input double          InpMaxDepthATR5     = 3.0;        // ไส้แทงเลยโซนได้ไม่เกิน (x ATR M5) ไม่งั้น = เบรคจริง
@@ -527,11 +543,58 @@ void Progress(STD &s)
 //==================================================================//
 //                             entry                                 //
 //==================================================================//
+//--- เวลา: หาเวลานิวยอร์กจากเวลาเซิร์ฟเวอร์ ---------------------------------
+datetime MonthStart(int year, int mon)
+  {
+   MqlDateTime d;
+   ZeroMemory(d);
+   d.year = year; d.mon = mon; d.day = 1;
+   return StructToTime(d);
+  }
+
+datetime NthSunday(int year, int mon, int n)          // n = 1, 2, ... ; n = -1 = อาทิตย์สุดท้ายของเดือน
+  {
+   MqlDateTime d;
+   if(n > 0)
+     {
+      datetime t = MonthStart(year, mon);
+      TimeToStruct(t, d);
+      return t + (datetime)(((7 - d.day_of_week) % 7) * 86400 + (n - 1) * 7 * 86400);
+     }
+   datetime last = (mon == 12 ? MonthStart(year + 1, 1) : MonthStart(year, mon + 1)) - 86400;
+   TimeToStruct(last, d);
+   return last - (datetime)(d.day_of_week * 86400);
+  }
+
+bool IsUSDST(datetime utc)                             // 2nd Sun Mar 07:00 UTC -> 1st Sun Nov 06:00 UTC
+  {
+   MqlDateTime d; TimeToStruct(utc, d);
+   datetime a = NthSunday(d.year, 3, 2) + 7 * 3600, b = NthSunday(d.year, 11, 1) + 6 * 3600;
+   return utc >= a && utc < b;
+  }
+
+bool IsEUDST(datetime utc)                             // last Sun Mar 01:00 UTC -> last Sun Oct 01:00 UTC
+  {
+   MqlDateTime d; TimeToStruct(utc, d);
+   datetime a = NthSunday(d.year, 3, -1) + 3600, b = NthSunday(d.year, 10, -1) + 3600;
+   return utc >= a && utc < b;
+  }
+
+datetime NYNow()
+  {
+   long srv = (long)TimeCurrent();
+   if(InpTimeMode == TD_TIME_MANUAL) return (datetime)(srv - (long)InpServerMinusNY * 3600);
+   long utc = srv - (long)InpServerGMT * 3600;
+   if(InpServerDST == TD_DST_EU && IsEUDST((datetime)utc)) utc -= 3600;
+   if(InpServerDST == TD_DST_US && IsUSDST((datetime)utc)) utc -= 3600;
+   return (datetime)(utc - 5 * 3600 + (IsUSDST((datetime)utc) ? 3600 : 0));
+  }
+
 bool InKZ()
   {
    if(!InpLondonKZ && !InpNYKZ) return true;
    MqlDateTime dt;
-   TimeToStruct((datetime)((long)TimeCurrent() - (long)InpServerMinusNY * 3600), dt);
+   TimeToStruct(NYNow(), dt);
    double h = dt.hour + dt.min / 60.0;
    if(InpLondonKZ && h >= InpLondonStart && h < InpLondonEnd) return true;
    if(InpNYKZ && h >= InpNYStart && h < InpNYEnd) return true;
@@ -663,7 +726,7 @@ int Enter(STD &s)
    if(InpSkipMonday)
      {
       MqlDateTime ny;
-      TimeToStruct((datetime)((long)TimeCurrent() - (long)InpServerMinusNY * 3600), ny);
+      TimeToStruct(NYNow(), ny);
       if(ny.day_of_week == 1) { g_status = "วันจันทร์: ไม่เทรด"; return -1; }
      }
    if(!InKZ())      { g_status = "PA เกิดนอก Kill Zone"; return 0; }
