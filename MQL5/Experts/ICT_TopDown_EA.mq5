@@ -13,7 +13,7 @@
 //|  ตรรกะเดียวกับ backtest/sim_m1.py                                  |
 //+------------------------------------------------------------------+
 #property copyright   "Eash"
-#property version     "1.42"
+#property version     "1.43"
 #property description "ICT top-down: HTF zones (H1/H4 swings, PDH/PDL) confirmed on M1; SL beyond the HTF zone; TP at the swing before the reversal"
 
 #include <Trade/Trade.mqh>
@@ -644,20 +644,34 @@ void TodayStats(int &trades, double &pl)
      }
   }
 
-double CalcLots(double dist)
+// ขาดทุนต่อ 1 lot ถ้าโดน SL (สกุลเงินบัญชี) — ใช้ OrderCalcProfit ของโบรกโดยตรง
+// (v1.43: เดิมใช้ TICK_VALUE ซึ่งบางโบรกรายงานผิด 10 เท่า ทำให้เสี่ยงจริง ~10%/ไม้)
+double LossPerLot(int d, double entry, double dist)
+  {
+   double pl = 0;
+   ENUM_ORDER_TYPE ot = d > 0 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+   if(OrderCalcProfit(ot, _Symbol, 1.0, entry, entry - d * dist, pl) && pl < 0) return -pl;
+   double ts = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE), tv = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE_LOSS);
+   if(tv <= 0) tv = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double byTick = (ts > 0 && tv > 0) ? dist / ts * tv : 0;
+   double byContract = dist * SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);   // บัญชี USD
+   return MathMax(byTick, byContract);              // เลือกค่าที่มากกว่า = ปลอดภัยไว้ก่อน
+  }
+
+double CalcLots(int d, double entry, double dist)
   {
    double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP), vmin = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
    double vmax = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
    double v = InpFixedLots;
    if(v <= 0)
      {
-      double ts = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE), tv = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
-      if(ts <= 0 || tv <= 0 || dist <= 0) return 0;
-      v = AccountInfoDouble(ACCOUNT_EQUITY) * InpRiskPercent / 100.0 / (dist / ts * tv);
+      double lpl = LossPerLot(d, entry, dist);
+      if(lpl <= 0 || dist <= 0) return 0;
+      v = AccountInfoDouble(ACCOUNT_EQUITY) * InpRiskPercent / 100.0 / lpl;
      }
    if(step <= 0) step = 0.01;
    v = MathFloor(v / step + 1e-9) * step;
-   if(v < vmin) return 0;
+   if(v < vmin) { PrintFormat("lot คำนวณได้ %.4f < ขั้นต่ำ %.2f ข้ามไม้นี้", v, vmin); return 0; }
    return NormalizeDouble(MathMin(v, vmax), (int)MathMax(0, MathCeil(-MathLog10(step) - 1e-9)));
   }
 
@@ -815,15 +829,17 @@ int Enter(STD &s)
       else tag = "|NB";                               // ไม่มีเป้าที่สอง: ถือถึง TP ไม่กันทุน (ตาม backtest)
      }
 
-   double lots = CalcLots(risk);
+   double lots = CalcLots(d, entry, risk);
    if(lots <= 0) return -1;
    sl = NP(sl); tp = NP(tp);
    string cmt = InpComment + tag;
    bool ok = d > 0 ? trade.Buy(lots, _Symbol, 0, sl, tp, cmt) : trade.Sell(lots, _Symbol, 0, sl, tp, cmt);
    if(ok && trade.ResultRetcode() == TRADE_RETCODE_DONE)
      {
-      PrintFormat("[%s] zone %s %.2f | lots %.2f entry %.2f SL %.2f TP1 %.2f TP %.2f RR1 %.2f",
-                  d > 0 ? "BUY" : "SELL", TFName(s.tf), s.level, lots, entry, sl, tp1, tp, d * (tp1 - entry) / risk);
+      double riskUsd = lots * LossPerLot(d, entry, MathAbs(entry - sl));
+      PrintFormat("[%s] zone %s %.2f | lots %.2f entry %.2f SL %.2f TP1 %.2f TP %.2f RR1 %.2f | เสี่ยง %.2f (%.2f%% ของ equity)",
+                  d > 0 ? "BUY" : "SELL", TFName(s.tf), s.level, lots, entry, sl, tp1, tp, d * (tp1 - entry) / risk,
+                  riskUsd, 100.0 * riskUsd / AccountInfoDouble(ACCOUNT_EQUITY));
       return 1;
      }
    PrintFormat("ส่งออเดอร์ไม่สำเร็จ %d %s", trade.ResultRetcode(), trade.ResultRetcodeDescription());
