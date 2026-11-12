@@ -47,6 +47,7 @@ class Params:
     entry_ce: bool = False          # True = เข้าที่ CE 50% ของ FVG, False = ขอบช่อง
     vol_mult: float = 0.0           # Wyckoff effort: volume ขา displacement >= กี่เท่า (0 = ปิด)
     # --- กรอบ Wyckoff บน H1 ---
+    wy_tfs: tuple = (60,)           # timeframe (นาที) ที่ใช้หากรอบ ไล่จากใหญ่ไปเล็ก หยุดเมื่อเจอกรอบ
     wy_bars: int = 72
     wy_min_width: float = 3.0       # ความกว้างกรอบขั้นต่ำ (เท่าของค่าเฉลี่ย high-low H1 ในกรอบ)
     wy_max_drift: float = 0.5       # |close สุดท้าย - close แรก| / ความกว้างกรอบ
@@ -182,6 +183,15 @@ def run(data: Data, p: Params):
     h1 = dfh.groupby("h").agg(high=("high", "max"), low=("low", "min"), close=("close", "last"))
     h1t = h1.index.to_numpy()
     h1h, h1l, h1c = h1.high.to_numpy(), h1.low.to_numpy(), h1.close.to_numpy()
+    wy = {}  # แท่งของแต่ละ timeframe ที่ใช้หากรอบ Wyckoff
+    for m in p.wy_tfs:
+        if m == 60:
+            wy[m] = (h1t, h1h, h1l, h1c)
+            continue
+        key = T5.astype("datetime64[m]").astype("int64") // m
+        g = pd.DataFrame({"k": key, "high": H, "low": L, "close": C}).groupby("k").agg(
+            high=("high", "max"), low=("low", "min"), close=("close", "last"))
+        wy[m] = (g.index.to_numpy(), g.high.to_numpy(), g.low.to_numpy(), g.close.to_numpy())
 
     X = {1: (H, L, C, O), -1: (-L, -H, -C, -O)}
     sides = {1: Side(1), -1: Side(-1)}
@@ -369,12 +379,16 @@ def run(data: Data, p: Params):
                         for price, tag in mine:
                             s.levels.append([d * price, tag, None, None, False])
                 if p.use_wyckoff:
-                    wr = wyckoff_range(h1h[:hi], h1l[:hi], h1c[:hi], p)
-                    if wr is not None:
-                        rl, rh = wr
-                        mid = (rl + rh) / 2
-                        sides[1].levels.append([rl, "WYCK", mid, rh, False])
-                        sides[-1].levels.append([-rh, "WYCK", -mid, -rl, False])
+                    for m in p.wy_tfs:  # ไล่จาก timeframe ใหญ่ลงเล็ก หยุดเมื่อเจอกรอบ
+                        wt, wh, wl, wc = wy[m]
+                        cut = hi if m == 60 else np.searchsorted(wt, T5[i].astype("datetime64[m]").astype("int64") // m)
+                        wr = wyckoff_range(wh[:cut], wl[:cut], wc[:cut], p)
+                        if wr is not None:
+                            rl, rh = wr
+                            mid = (rl + rh) / 2
+                            sides[1].levels.append([rl, f"WYCK{m}", mid, rh, False])
+                            sides[-1].levels.append([-rh, f"WYCK{m}", -mid, -rl, False])
+                            break
         # ---------- Silver Bullet: FVG แรกในชั่วโมงที่ชี้ไปทางเป้า ----------
         if p.use_silver_bullet:
             win = None
@@ -502,7 +516,7 @@ def run(data: Data, p: Params):
                 cnt("risk")
                 continue
             lv = s.lvl
-            if lv[1] == "WYCK":
+            if lv[1].startswith("WYCK"):
                 tp1, tp2 = lv[2], lv[3]
                 if tp2 - ent < p.min_rr * risk:
                     cnt("wy_rr")
