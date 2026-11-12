@@ -67,6 +67,16 @@ class Params:
     fallback_rr: float = 0.0        # ถ้าไม่มีเป้าสภาพคล่อง ใช้ RR คงที่ (0 = ไม่เข้า)
     partial_at_tp1: bool = True
     exit_on_fvg_fail: bool = True   # แท่ง M5 ปิดทะลุ FVG สวนทาง -> ปิดเอง
+    # --- Fibonacci: TF ใหญ่บอกเทรนด์หลัก, TF เล็กหาจังหวะเข้า ---
+    htf_fib: bool = False           # ใช้ Fibonacci ของ swing บน TF ใหญ่เป็นตัวกรองเทรนด์หลัก + โซนราคา
+    htf_tf: int = 240               # TF ใหญ่ (นาที)
+    htf_strength: int = 3           # ความแรง swing บน TF ใหญ่
+    htf_min_retr: float = 0.5       # ราคาต้องย่อเข้ามาอย่างน้อยเท่านี้ของขาใหญ่ (0.5 = ครึ่ง Discount/Premium)
+    htf_max_retr: float = 1.0
+    ltf_fib: bool = False           # จุดเข้าที่ระดับ Fibonacci ของขา displacement บน TF เล็ก (แทนขอบ FVG)
+    fib_entry: float = 0.705
+    fib_need_fvg: bool = False      # โซน 0.62-0.79 ต้องมี FVG ซ้อนอยู่
+    fib_tp_ext: float = 0.27        # tp_mode="fib": TP1 = ระดับ 0, TP2 = ระดับ -0.27
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -203,6 +213,39 @@ def run(data: Data, p: Params):
     h1 = dfh.groupby("h").agg(high=("high", "max"), low=("low", "min"), close=("close", "last"))
     h1t = h1.index.to_numpy()
     h1h, h1l, h1c = h1.high.to_numpy(), h1.low.to_numpy(), h1.close.to_numpy()
+    hk = T5.astype("datetime64[m]").astype("int64") // p.htf_tf
+    gh_ = pd.DataFrame({"k": hk, "high": H, "low": L, "close": C}).groupby("k").agg(
+        high=("high", "max"), low=("low", "min"), close=("close", "last"))
+    htk, htH, htL, htC = gh_.index.to_numpy(), gh_.high.to_numpy(), gh_.low.to_numpy(), gh_.close.to_numpy()
+
+    def htf_fib(i, d):
+        """เทรนด์หลักจากโครงสร้าง TF ใหญ่ และระดับที่ราคาย่อเข้ามาในขาใหญ่ (0 = ปลายขา, 1 = ต้นขา)
+        คืน (trend, retracement, ต้นขา', ปลายขา') ในพิกัดของทิศ d"""
+        cut = np.searchsorted(htk, hk[i])            # แท่ง TF ใหญ่ที่ปิดแล้ว
+        st = p.htf_strength
+        a = max(cut - 300, st)
+        trend, sh, sl_, shB, slB = 0, 0.0, 0.0, True, True
+        for j in range(a + st, cut):
+            k = j - st
+            if k - st >= 0:
+                if htH[k] > htH[k - st:k].max() and htH[k] > htH[k + 1:k + st + 1].max():
+                    sh, shB = htH[k], False
+                if htL[k] < htL[k - st:k].min() and htL[k] < htL[k + 1:k + st + 1].min():
+                    sl_, slB = htL[k], False
+            if not shB and htC[j] > sh:
+                trend, shB = 1, True
+            if not slB and htC[j] < sl_:
+                trend, slB = -1, True
+        Hh, Lh = (htH, htL) if d == 1 else (-htL, -htH)
+        for k in range(cut - st - 1, a, -1):         # swing low' ล่าสุด = ต้นขา
+            if Lh[k] < Lh[k - st:k].min() and Lh[k] < Lh[k + 1:k + st + 1].min():
+                lo = Lh[k]
+                hi_ = max(Hh[k:cut].max(), X[d][0][day_start_i:i + 1].max())
+                if hi_ <= lo:
+                    return trend, None, lo, hi_
+                return trend, (hi_ - X[d][2][i]) / (hi_ - lo), lo, hi_
+        return trend, None, None, None
+
     wy = {}  # แท่งของแต่ละ timeframe ที่ใช้หากรอบ Wyckoff
     for m in p.wy_tfs:
         if m == 60:
@@ -375,7 +418,7 @@ def run(data: Data, p: Params):
                         if l - xa <= pos["sl"]:
                             close_pos(pos["sl"], m1t[k], "SL")
                         continue
-                    if h - xa >= (pending["tp2"] if pending["tag"] == "SB" else pending["tp1"]):
+                    if h - xa >= (pending["tp2"] if (pending["tag"] == "SB" or p.ltf_fib) else pending["tp1"]):
                         pending = None  # ราคาไปถึงเป้าก่อนย่อมาเข้า
                     continue
                 # มีสถานะ
@@ -590,6 +633,11 @@ def run(data: Data, p: Params):
                 continue
             leg_high = Hd[e:i + 1].max()
             eq = (leg_high + s.ext) / 2
+            if p.htf_fib:
+                tr_, retr, _, _ = htf_fib(i, d)
+                if tr_ != d or retr is None or not (p.htf_min_retr <= retr <= p.htf_max_retr):
+                    cnt("htf")
+                    continue
             setup = None
             for j in range(i, e, -1):  # FVG จากบนลงล่าง
                 g_lo, g_hi = Hd[j - 2], Ld[j]
@@ -606,6 +654,13 @@ def run(data: Data, p: Params):
                         continue
                 setup = (ent, g_lo)
                 break
+            if p.ltf_fib:
+                rg_ = leg_high - s.ext
+                z_hi, z_lo = leg_high - 0.62 * rg_, leg_high - 0.79 * rg_
+                if p.fib_need_fvg and (setup is None or setup[1] > z_hi or setup[0] < z_lo):
+                    setup = None
+                else:
+                    setup = (leg_high - p.fib_entry * rg_, s.ext)
             if setup is None:
                 cnt("nofvg")
                 continue
@@ -625,7 +680,13 @@ def run(data: Data, p: Params):
                 if risk < p.min_risk * A or risk > p.max_risk * A:
                     cnt("risk")
                     continue
-            if p.tp_mode == "range":
+            if p.tp_mode == "fib":
+                tp1 = leg_high                                   # ระดับ 0
+                tp2 = leg_high + p.fib_tp_ext * (leg_high - s.ext)   # ระดับ -0.27
+                if tp2 - ent < p.min_rr * risk:
+                    cnt("no_target")
+                    continue
+            elif p.tp_mode == "range":
                 # เป้าจากกรอบราคา: TP1 = swing H1 ก่อนจุดกลับตัว, TP2 = ขอบ dealing range (จุดสูงสุดตั้งแต่โซนเกิดจนถึงจุดกวาด)
                 hH = h1h if d == 1 else -h1l
                 tp1 = None

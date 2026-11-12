@@ -71,6 +71,19 @@ input int    InpOrderGrace    = 60;     // นาทีที่ออเดอ�
 input bool   InpPartialAtTp1  = true;   // ปิด 50% ที่ TP1 แล้วเลื่อน SL เท่าทุน
 input bool   InpExitOnFvgFail = true;   // แท่งปิดทะลุ FVG สวนทาง -> ปิดเอง
 
+input group "=== Fibonacci: TF ใหญ่บอกเทรนด์หลัก, TF เล็กหาจังหวะเข้า ==="
+input bool   InpHtfFib        = false;  // TF ใหญ่: เทรดตามเทรนด์หลัก และราคาต้องย่อเข้าโซนของขาใหญ่
+input ENUM_TIMEFRAMES InpHtfTF = PERIOD_H4; // TF ใหญ่ที่ใช้ตี Fibonacci
+input int    InpHtfStrength   = 3;      // ความแรง swing บน TF ใหญ่ (แท่งซ้าย/ขวา)
+input double InpHtfMinRetr    = 0.5;    // ราคาต้องย่ออย่างน้อยระดับนี้ของขาใหญ่ (0.5 = ครึ่ง Discount/Premium, 0 = ดูเทรนด์อย่างเดียว)
+input double InpHtfMaxRetr    = 1.0;    // ราคาย่อได้ไม่เกินระดับนี้
+input bool   InpLtfFib        = false;  // TF เล็ก: เข้าที่ระดับ Fibonacci ของขา displacement (แทนขอบ FVG)
+input double InpFibEntry      = 0.705;  // ระดับเข้า
+input bool   InpFibNeedFvg    = false;  // โซน 0.62-0.79 ต้องมี FVG ซ้อนอยู่
+input bool   InpFibTp         = false;  // TP1 = ระดับ 0 (ปลายขา), TP2 = ระดับส่วนขยาย
+input double InpFibTpExt      = 0.27;   // ส่วนขยายของ TP2 (0.27 = ระดับ -0.27)
+input bool   InpDrawFib       = false;  // วาด Fibonacci ของขา TF ใหญ่และ TF เล็กบนกราฟ
+
 input group "=== ตัวเลือกจาก ICT_TopDown (ปิดไว้เป็นค่าเริ่มต้น) ==="
 input bool   InpPersistZones  = false;  // เก็บโซนข้ามวันจนกว่าจะถูกแตะ
 input int    InpSweepPaBars   = 0;      // ต้องมีแท่งกลับตัวภายในกี่แท่งจากจุดสุดของไส้ (0 = ไม่บังคับ, แนะนำ 3)
@@ -377,6 +390,121 @@ void ZonePrune(const int i)
 //+------------------------------------------------------------------+
 //| วาดบนกราฟ / แผงสถานะ                                               |
 //+------------------------------------------------------------------+
+// วาด Fibonacci: ระดับ 1 ที่ต้นขา (t1, p1) ระดับ 0 ที่ปลายขา (t2, p2)
+void DrawFib(const string id, const datetime t1, const double p1, const datetime t2, const double p2)
+  {
+   if(!InpDrawFib)
+      return;
+   string nm = PFX + "fib" + id;
+   ObjectDelete(0, nm);
+   if(!ObjectCreate(0, nm, OBJ_FIBO, 0, t1, p1, t2, p2))
+      return;
+   double lv[11]  = {0, 0.21, 0.295, 0.38, 0.5, 0.62, 0.705, 0.79, 1, -0.27, 1.27};
+   color  lc[11]  = {clrGray, clrYellow, clrYellow, clrYellow, clrRed, clrDodgerBlue, clrDodgerBlue, clrDodgerBlue, clrGray, clrGray, clrSilver};
+   ObjectSetInteger(0, nm, OBJPROP_COLOR, clrGray);
+   ObjectSetInteger(0, nm, OBJPROP_STYLE, STYLE_DOT);
+   ObjectSetInteger(0, nm, OBJPROP_RAY_RIGHT, true);
+   ObjectSetInteger(0, nm, OBJPROP_LEVELS, 11);
+   for(int k = 0; k < 11; k++)
+     {
+      ObjectSetDouble(0, nm, OBJPROP_LEVELVALUE, k, lv[k]);
+      ObjectSetInteger(0, nm, OBJPROP_LEVELCOLOR, k, lc[k]);
+      ObjectSetInteger(0, nm, OBJPROP_LEVELSTYLE, k, STYLE_SOLID);
+      ObjectSetString(0, nm, OBJPROP_LEVELTEXT, k, DoubleToString(lv[k], 3) + "  %$");
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| Fibonacci บน TF ใหญ่: เทรนด์หลักจากโครงสร้าง + ระดับที่ราคาย่อเข้ามา   |
+//| คืนเทรนด์ (1 / -1 / 0), retr = ระดับที่ราคาอยู่ในขาใหญ่ของทิศ d       |
+//| (0 = ปลายขา, 1 = ต้นขา, -1 = หาขาไม่ได้)                            |
+//+------------------------------------------------------------------+
+int HtfFib(const int i, const int d, double &retr)
+  {
+   retr = -1;
+   MqlRates h[];
+   int n = CopyRates(_Symbol, InpHtfTF, 0, 330, h);
+   if(n < 40)
+      return 0;
+   ArraySetAsSeries(h, false);
+   long ps = PeriodSeconds(InpHtfTF);
+   datetime bucket = (datetime)(r[i].time - r[i].time % ps);
+   int cut = n;                                   // จำนวนแท่ง TF ใหญ่ที่ปิดแล้วก่อนแท่งที่มี r[i]
+   while(cut > 0 && h[cut - 1].time >= bucket)
+      cut--;
+   int st = InpHtfStrength;
+   int a = MathMax(cut - 300, st);
+   int trend = 0;
+   double sh = 0, sl = 0;
+   bool shB = true, slB = true;
+   for(int j = a + st; j < cut; j++)
+     {
+      int k = j - st;
+      if(k - st >= 0)
+        {
+         bool isH = true, isL = true;
+         for(int q = 1; q <= st; q++)
+           {
+            if(!(h[k].high > h[k - q].high && h[k].high > h[k + q].high))
+               isH = false;
+            if(!(h[k].low < h[k - q].low && h[k].low < h[k + q].low))
+               isL = false;
+           }
+         if(isH)
+           {
+            sh = h[k].high;
+            shB = false;
+           }
+         if(isL)
+           {
+            sl = h[k].low;
+            slB = false;
+           }
+        }
+      if(!shB && h[j].close > sh)
+        {
+         trend = 1;
+         shB = true;
+        }
+      if(!slB && h[j].close < sl)
+        {
+         trend = -1;
+         slB = true;
+        }
+     }
+   for(int k = cut - st - 1; k > a; k--)          // swing low' ล่าสุด = ต้นขา
+     {
+      bool sw = true;
+      for(int q = 1; q <= st && sw; q++)
+         if(!(Ld(d, h[k]) < Ld(d, h[k - q]) && Ld(d, h[k]) < Ld(d, h[k + q])))
+            sw = false;
+      if(!sw)
+         continue;
+      double lo = Ld(d, h[k]), hi = -DBL_MAX;
+      datetime hiT = h[k].time;
+      for(int q = k; q < cut; q++)
+         if(Hd(d, h[q]) > hi)
+           {
+            hi = Hd(d, h[q]);
+            hiT = h[q].time;
+           }
+      for(int q = i; q >= 0 && DayOf(T7(r[q].time)) == g_day; q--)
+         if(Hd(d, r[q]) > hi)
+           {
+            hi = Hd(d, r[q]);
+            hiT = r[q].time;
+           }
+      if(hi > lo)
+        {
+         retr = (hi - Cd(d, r[i])) / (hi - lo);
+         if(trend == d)
+            DrawFib("H", h[k].time, d * lo, hiT, d * hi);
+        }
+      break;
+     }
+   return trend;
+  }
+
 void DrawSweep(const datetime t, const double level)
   {
    if(!InpDraw)
@@ -761,6 +889,16 @@ void TrySetup(SSide &s, const int i, const int endm)
    if(legBody < InpDispMult * avgBody)
       return;                                    // ไม่มี Displacement
    double eq = (legHigh + s.ext) / 2;
+   if(InpHtfFib)
+     {
+      double retr;
+      int ht = HtfFib(i, d, retr);
+      if(ht != d || retr < 0 || retr < InpHtfMinRetr || retr > InpHtfMaxRetr)
+        {
+         g_status = "TF ใหญ่: เทรนด์ไม่ตรง หรือราคายังไม่เข้าโซน Fibonacci";
+         return;
+        }
+     }
    double ent = 0, fvgLo = 0;
    bool found = false;
    for(int j = i; j > e && !found; j--)          // FVG จากบนลงล่าง
@@ -786,6 +924,20 @@ void TrySetup(SSide &s, const int i, const int endm)
       ent = x;
       fvgLo = gLo;
       found = true;
+     }
+   if(InpLtfFib)
+     {
+      double rg = legHigh - s.ext;
+      double zHi = legHigh - 0.62 * rg, zLo = legHigh - 0.79 * rg;
+      if(InpFibNeedFvg && (!found || fvgLo > zHi || ent < zLo))
+         found = false;                           // ไม่มี FVG ซ้อนโซน 0.62-0.79
+      else
+        {
+         ent   = legHigh - InpFibEntry * rg;
+         fvgLo = s.ext;
+         found = true;
+        }
+      DrawFib("L" + IntegerToString((long)r[i].time), s.extTime, d * s.ext, r[i].time, d * legHigh);
      }
    if(!found)
       return;
@@ -821,7 +973,14 @@ void TrySetup(SSide &s, const int i, const int endm)
          return;
      }
    double tp1 = 0, tp2 = 0;
-   if(InpTpFromRange)
+   if(InpFibTp)
+     {
+      tp1 = legHigh;                               // ระดับ 0
+      tp2 = legHigh + InpFibTpExt * (legHigh - s.ext);   // ระดับ -0.27
+      if(tp2 - ent < InpMinRR * risk)
+         return;
+     }
+   else if(InpTpFromRange)
      {
       // TP1 = swing H1 ล่าสุดก่อนจุดกลับตัวที่อยู่เหนือจุดเข้า
       if(he < 0)
@@ -912,7 +1071,7 @@ void TrySetup(SSide &s, const int i, const int endm)
       g_expire = g_kzEnd + InpOrderGrace;
       return;
      }
-   PlaceOrder(d, ent, sl, tp1, tp2, fvgLo, g_kzEnd + InpOrderGrace, tp1, s.lv[s.lvl].tag);
+   PlaceOrder(d, ent, sl, tp1, tp2, fvgLo, g_kzEnd + InpOrderGrace, InpLtfFib ? tp2 : tp1, s.lv[s.lvl].tag);
   }
 
 //+------------------------------------------------------------------+
