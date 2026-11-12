@@ -42,6 +42,17 @@ class IndParams:
     min_rr: float = 2.0
     use_bias: bool = True
     min_grade: str = "C"
+    # ตัวกรองแบบบังคับ (ยืมจาก EA): ไม่ผ่าน = ไม่เข้า แทนที่จะเป็นแค่คะแนนเกรด
+    require_kz: bool = False        # ต้องอยู่ใน Kill Zone / Silver Bullet ตอนเข้า
+    require_bias: bool = False      # ต้องตรงกับ bias รายวัน
+    require_sweep: bool = False     # ต้องมีการกวาดสภาพคล่องก่อน MSS
+    require_disp: bool = False      # ต้องมี Displacement
+    require_pd: bool = False        # จุดเข้าต้องอยู่ฝั่ง Discount / Premium
+    fvg_only: bool = False          # ใช้เฉพาะ FVG ไม่ใช้ Order Block สำรอง
+    news_block: tuple = (0, 0)      # งดเข้าช่วงนาทีนี้ (915, 945) = 08:15-08:45 นิวยอร์ก
+    skip_nfp_day: bool = False      # งดศุกร์แรกของเดือน
+    max_trades_day: int = 0         # 0 = ไม่จำกัด
+    max_losses_day: int = 0
     # การเทรด
     mode: str = "market"
     partial_at_tp1: bool = True
@@ -180,6 +191,7 @@ def run_indicator(data: Data, p: IndParams):
     suDir, suBar, suEntry, suSL, suSwept, suDisp, suPoi = 0, 0, 0.0, 0.0, False, False, ""
     equity = p.balance
     trades = []
+    cnt_day, day_tr, day_ls = None, 0, 0
     busy_until = -1                 # index แท่ง M1 ที่ไม้ปัจจุบันปิด
     grade_rank = {"A": 0, "B": 1, "C": 2}
     prev_day = prev_week = None
@@ -329,7 +341,17 @@ def run_indicator(data: Data, p: IndParams):
                 score = suSwept + suDisp + pd_ok + kz_pass + bias_ok
                 max_s = 4 + (1 if p.use_bias else 0)
                 g = "A" if score >= max_s else "B" if score == max_s - 1 else "C"
-                if (p.min_rr <= 0 or rr >= p.min_rr) and grade_rank[g] <= grade_rank[p.min_grade]:
+                hard = ((kz_pass or not p.require_kz) and (bias == d or not p.require_bias)
+                        and (suSwept or not p.require_sweep) and (suDisp or not p.require_disp)
+                        and (pd_ok or not p.require_pd) and not (p.news_block[0] <= mod < p.news_block[1]))
+                if p.skip_nfp_day:
+                    ts = pd.Timestamp(day)
+                    hard = hard and not (ts.weekday() == 4 and ts.day <= 7)
+                if day != cnt_day:
+                    cnt_day, day_tr, day_ls = day, 0, 0
+                if (p.max_trades_day and day_tr >= p.max_trades_day) or (p.max_losses_day and day_ls >= p.max_losses_day):
+                    hard = False
+                if hard and (p.min_rr <= 0 or rr >= p.min_rr) and grade_rank[g] <= grade_rank[p.min_grade]:
                     # ---------- เทรดตามสัญญาณ ----------
                     k0 = None
                     if p.mode == "market":
@@ -351,6 +373,8 @@ def run_indicator(data: Data, p: IndParams):
                             pnl, kx, why = sim(k0, d, entry, suSL, tp1, dol, lot, p.mode == "limit")
                             pnl -= p.commission * lot
                             equity += pnl
+                            day_tr += 1
+                            day_ls += pnl < 0
                             busy_until = kx
                             trades.append(dict(open_time=m1t[k0], close_time=m1t[kx], dir=d, grade=g, poi=suPoi,
                                                kz=kz_pass, entry=entry, sl=suSL, tp1=tp1, tp2=dol, lot=lot, pnl=pnl,
@@ -412,7 +436,7 @@ def run_indicator(data: Data, p: IndParams):
                     if f[3] == brk and not f[4] and f[5] >= legX:
                         poi, suPoi = (f[0], f[1], f[2]), "FVG"
                         break
-                if poi is None and ob is not None:
+                if poi is None and ob is not None and not p.fvg_only:
                     poi, suPoi = ob, "OB"
                 if poi is not None:
                     suDir, suBar = brk, i
