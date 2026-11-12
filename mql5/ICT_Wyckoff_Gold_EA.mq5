@@ -59,7 +59,13 @@ input group "=== ออเดอร์ ==="
 input double InpSlBuffer      = 0.5;    // เผื่อ SL เลยจุดกวาด (เท่าของ A)
 input double InpMinRisk       = 2.0;    // ระยะ SL ขั้นต่ำ (เท่าของ A)
 input double InpMaxRisk       = 12.0;   // ระยะ SL สูงสุด (เท่าของ A)
-input double InpMinRR         = 2.0;    // Risk:Reward ขั้นต่ำถึงเป้า
+input double InpMinRR         = 2.0;    // Risk:Reward ขั้นต่ำถึงเป้า (โหมดเป้าจากกรอบแนะนำ 0.8)
+input bool   InpTpFromRange   = false;  // เป้าจากกรอบราคา: TP1 = swing H1 ก่อนจุดกลับตัว, TP2 = ขอบ dealing range
+input int    InpTpSwingStrength = 2;    // เป้าจากกรอบ: ความแรง swing H1 ที่ใช้เป็น TP1
+input int    InpRangeLookback = 3000;   // เป้าจากกรอบ: ย้อนหาจุดที่โซนเกิดไม่เกินกี่แท่ง
+input bool   InpSlBeyondZone  = false;  // SL พ้นโซนที่ถูกกวาด (x ATR H1) แทนการชิดไส้
+input double InpSlZoneAtr     = 1.5;    // SL พ้นโซน: ระยะ (x ATR H1)
+input double InpSlZoneMax     = 2.5;    // SL พ้นโซน: เพดานระยะ SL (x ATR H1)
 input double InpFallbackRR    = 0.0;    // ถ้าไม่มีเป้าสภาพคล่อง ใช้ RR คงที่ (0 = ไม่เข้า)
 input int    InpOrderGrace    = 60;     // นาทีที่ออเดอร์รอได้หลังหมด Kill Zone
 input bool   InpPartialAtTp1  = true;   // ปิด 50% ที่ TP1 แล้วเลื่อน SL เท่าทุน
@@ -71,7 +77,7 @@ input int    InpMaxTradesDay  = 2;      // จำนวนไม้สูงส�
 input int    InpMaxLossesDay  = 2;      // แพ้ครบกี่ไม้แล้วหยุดวันนั้น
 input long   InpMagic         = 20261111;
 
-#define BARS    1500
+#define BARS    3500
 #define TAG_ASIA  1
 #define TAG_LON   2
 #define TAG_PD    3
@@ -584,46 +590,111 @@ void TrySetup(SSide &s, const int i, const int endm)
      }
    if(!found)
       return;
+   // แท่ง H1: he = แท่งที่มีจุดสุดของไส้
+   MqlRates h[];
+   int hn = CopyRates(_Symbol, PERIOD_H1, 0, 400, h);
+   ArraySetAsSeries(h, false);
+   int he = -1;
+   for(int k = hn - 1; k >= 0; k--)
+      if(h[k].time <= r[e].time)
+        {
+         he = k;
+         break;
+        }
+   double level = s.lv[s.lvl].price;
    double sl = s.ext - InpSlBuffer * A;
-   double risk = ent - sl;
-   if(risk < InpMinRisk * A || risk > InpMaxRisk * A)
-      return;
-   double tp1 = 0, tp2 = 0;
-   if(s.lv[s.lvl].tag == TAG_WYCK)
+   double risk;
+   if(InpSlBeyondZone && he >= 15)
      {
-      tp1 = s.lv[s.lvl].tp1;                     // กลางกรอบ
-      tp2 = s.lv[s.lvl].tp2;                     // ขอบกรอบฝั่งตรงข้าม
-      if(tp2 - ent < InpMinRR * risk)
+      double aH1 = 0;
+      for(int k = he - 14; k < he; k++)
+         aH1 += h[k].high - h[k].low;
+      aH1 /= 14;
+      sl = MathMin(sl, level - InpSlZoneAtr * aH1);   // พ้นโซน หรือหลังไส้ถ้าไส้ลึกกว่า
+      risk = ent - sl;
+      if(risk <= 0 || risk > InpSlZoneMax * aH1)
          return;
      }
    else
      {
-      double dayHi = -DBL_MAX;
-      for(int k = i; k >= 0 && DayOf(T7(r[k].time)) == g_day; k--)
-         dayHi = MathMax(dayHi, Hd(d, r[k]));
-      bool has = false;
-      for(int k = 0; k < ArraySize(s.tg); k++)
-         if(s.tg[k] > dayHi && s.tg[k] - ent >= InpMinRR * risk)
-           {
-            tp2 = s.tg[k];
-            has = true;
-            break;
-           }
-      if(!has)
-        {
-         if(InpFallbackRR <= 0)
-            return;                              // ไม่มีเป้า = ไม่เข้า
-         tp2 = ent + InpFallbackRR * risk;
-        }
-      tp1 = legHigh;
-      for(int j = e - 1; j > MathMax(e - 96, 1); j--)   // จุดสูงย่อยฝั่งตรงข้ามตัวแรก
-         if(Hd(d, r[j]) > legHigh && Hd(d, r[j]) > Hd(d, r[j - 1]) && Hd(d, r[j]) > Hd(d, r[j + 1]))
-           {
-            tp1 = Hd(d, r[j]);
-            break;
-           }
+      risk = ent - sl;
+      if(risk < InpMinRisk * A || risk > InpMaxRisk * A)
+         return;
      }
-   tp1 = MathMin(MathMax(tp1, ent + risk), tp2);
+   double tp1 = 0, tp2 = 0;
+   if(InpTpFromRange)
+     {
+      // TP1 = swing H1 ล่าสุดก่อนจุดกลับตัวที่อยู่เหนือจุดเข้า
+      if(he < 0)
+         return;
+      bool got = false;
+      int ts = InpTpSwingStrength;
+      for(int k = he - 1; k > MathMax(he - 300, ts) && !got; k--)
+        {
+         if(k + ts > he)
+            continue;
+         double v = Hd(d, h[k]);
+         if(v <= ent)
+            continue;
+         bool sw = true;
+         for(int q = 1; q <= ts && sw; q++)
+            if(!(v > Hd(d, h[k + q]) && v >= Hd(d, h[k - q])))
+               sw = false;
+         if(sw)
+           {
+            tp1 = v;
+            got = true;
+           }
+        }
+      if(!got || tp1 - ent < InpMinRR * risk)
+         return;
+      // TP2 = ขอบ dealing range: จุดสูงสุดตั้งแต่โซนเกิดจนถึงจุดกวาด
+      int j = e - 1, lim = MathMax(e - InpRangeLookback, 0);
+      while(j > lim && Ld(d, r[j]) > level)
+         j--;
+      double edge = -DBL_MAX;
+      for(int k = j; k <= e; k++)
+         edge = MathMax(edge, Hd(d, r[k]));
+      tp2 = (edge > tp1) ? edge : tp1;
+     }
+   else
+     {
+      if(s.lv[s.lvl].tag == TAG_WYCK)
+        {
+         tp1 = s.lv[s.lvl].tp1;                     // กลางกรอบ
+         tp2 = s.lv[s.lvl].tp2;                     // ขอบกรอบฝั่งตรงข้าม
+         if(tp2 - ent < InpMinRR * risk)
+            return;
+        }
+      else
+        {
+         double dayHi = -DBL_MAX;
+         for(int k = i; k >= 0 && DayOf(T7(r[k].time)) == g_day; k--)
+            dayHi = MathMax(dayHi, Hd(d, r[k]));
+         bool has = false;
+         for(int k = 0; k < ArraySize(s.tg); k++)
+            if(s.tg[k] > dayHi && s.tg[k] - ent >= InpMinRR * risk)
+              {
+               tp2 = s.tg[k];
+               has = true;
+               break;
+              }
+         if(!has)
+           {
+            if(InpFallbackRR <= 0)
+               return;                              // ไม่มีเป้า = ไม่เข้า
+            tp2 = ent + InpFallbackRR * risk;
+           }
+         tp1 = legHigh;
+         for(int j = e - 1; j > MathMax(e - 96, 1); j--)   // จุดสูงย่อยฝั่งตรงข้ามตัวแรก
+            if(Hd(d, r[j]) > legHigh && Hd(d, r[j]) > Hd(d, r[j - 1]) && Hd(d, r[j]) > Hd(d, r[j + 1]))
+              {
+               tp1 = Hd(d, r[j]);
+               break;
+              }
+        }
+      tp1 = MathMin(MathMax(tp1, ent + risk), tp2);
+     }
 
    PlaceOrder(d, ent, sl, tp1, tp2, fvgLo, g_kzEnd + InpOrderGrace, tp1, s.lv[s.lvl].tag);
   }

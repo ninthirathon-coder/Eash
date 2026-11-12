@@ -57,6 +57,12 @@ class Params:
     min_risk: float = 2.0           # ระยะ SL สั้นกว่านี้ข้าม (เท่าของ A)
     max_risk: float = 12.0          # ระยะ SL กว้างกว่านี้ข้าม (เท่าของ A)
     min_rr: float = 2.0
+    tp_mode: str = "liquidity"      # "liquidity" = สภาพคล่องฝั่งตรงข้าม, "range" = swing ก่อนกลับตัว + ขอบ dealing range
+    tp_swing_strength: int = 2      # โหมด range: ความแรง swing H1 ที่ใช้เป็น TP1
+    range_lookback: int = 3000      # โหมด range: ย้อนหาจุดที่โซนเกิดไม่เกินกี่แท่ง
+    sl_mode: str = "wick"           # "wick" = เลยไส้ที่กวาด, "zone" = พ้นโซน (x ATR H1)
+    sl_zone_atr: float = 1.5
+    sl_zone_max: float = 2.5        # เพดานระยะ SL โหมด zone (x ATR H1)
     order_grace: int = 60           # นาทีที่ออเดอร์รอได้หลังหมด Kill Zone
     fallback_rr: float = 0.0        # ถ้าไม่มีเป้าสภาพคล่อง ใช้ RR คงที่ (0 = ไม่เข้า)
     partial_at_tp1: bool = True
@@ -510,37 +516,67 @@ def run(data: Data, p: Params):
                 cnt("nofvg")
                 continue
             ent, fvg_lo = setup
-            sl = s.ext - p.sl_buffer * A
-            risk = ent - sl
-            if risk < p.min_risk * A or risk > p.max_risk * A:
-                cnt("risk")
-                continue
             lv = s.lvl
-            if lv[1].startswith("WYCK"):
-                tp1, tp2 = lv[2], lv[3]
-                if tp2 - ent < p.min_rr * risk:
-                    cnt("wy_rr")
+            he = np.searchsorted(h1t, T5[e].astype("datetime64[h]"))   # แท่ง H1 ที่มีจุดสุดของไส้
+            sl = s.ext - p.sl_buffer * A
+            if p.sl_mode == "zone" and he >= 15:
+                aH1 = (h1h[he - 14:he] - h1l[he - 14:he]).mean()
+                sl = min(sl, lv[0] - p.sl_zone_atr * aH1)       # พ้นโซน TF ใหญ่ (หรือหลังไส้ถ้าไส้ลึกกว่า)
+                risk = ent - sl
+                if risk <= 0 or risk > p.sl_zone_max * aH1:
+                    cnt("risk")
                     continue
             else:
-                tp2 = None
-                day_hi = Hd[day_start_i:i + 1].max()
-                for tgt in s.targets:
-                    if tgt > day_hi and tgt - ent >= p.min_rr * risk:
-                        tp2 = tgt
-                        break
-                if tp2 is None:
-                    if p.fallback_rr <= 0:
-                        cnt("no_target")
-                        continue
-                    tp2 = ent + p.fallback_rr * risk
+                risk = ent - sl
+                if risk < p.min_risk * A or risk > p.max_risk * A:
+                    cnt("risk")
+                    continue
+            if p.tp_mode == "range":
+                # เป้าจากกรอบราคา: TP1 = swing H1 ก่อนจุดกลับตัว, TP2 = ขอบ dealing range (จุดสูงสุดตั้งแต่โซนเกิดจนถึงจุดกวาด)
+                hH = h1h if d == 1 else -h1l
                 tp1 = None
-                for j in range(e - 1, max(e - 96, 1), -1):
-                    if Hd[j] > leg_high and Hd[j] > Hd[j - 1] and Hd[j] > Hd[j + 1]:
-                        tp1 = Hd[j]
+                ts = p.tp_swing_strength
+                for k in range(he - 1, max(he - 300, ts), -1):
+                    if k + ts > he:
+                        continue
+                    if hH[k] > ent and all(hH[k] > hH[k + q] and hH[k] >= hH[k - q] for q in range(1, ts + 1)):
+                        tp1 = hH[k]
                         break
-                if tp1 is None:
-                    tp1 = leg_high
-            tp1 = min(max(tp1, ent + risk), tp2)
+                if tp1 is None or tp1 - ent < p.min_rr * risk:
+                    cnt("no_target")
+                    continue
+                j = e - 1
+                lim = max(e - p.range_lookback, 0)
+                while j > lim and Ld[j] > lv[0]:
+                    j -= 1
+                edge = Hd[j:e + 1].max()
+                tp2 = edge if edge > tp1 else tp1
+            else:
+                if lv[1].startswith("WYCK"):
+                    tp1, tp2 = lv[2], lv[3]
+                    if tp2 - ent < p.min_rr * risk:
+                        cnt("wy_rr")
+                        continue
+                else:
+                    tp2 = None
+                    day_hi = Hd[day_start_i:i + 1].max()
+                    for tgt in s.targets:
+                        if tgt > day_hi and tgt - ent >= p.min_rr * risk:
+                            tp2 = tgt
+                            break
+                    if tp2 is None:
+                        if p.fallback_rr <= 0:
+                            cnt("no_target")
+                            continue
+                        tp2 = ent + p.fallback_rr * risk
+                    tp1 = None
+                    for j in range(e - 1, max(e - 96, 1), -1):
+                        if Hd[j] > leg_high and Hd[j] > Hd[j - 1] and Hd[j] > Hd[j + 1]:
+                            tp1 = Hd[j]
+                            break
+                    if tp1 is None:
+                        tp1 = leg_high
+                tp1 = min(max(tp1, ent + risk), tp2)
             lot = np.floor(equity * p.risk_pct / 100 / (risk * OZ_PER_LOT) * 100 + 1e-9) / 100
             if lot < 0.01:
                 cnt("lot")
