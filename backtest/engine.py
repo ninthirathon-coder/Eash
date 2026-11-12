@@ -67,6 +67,19 @@ class Params:
     fallback_rr: float = 0.0        # ถ้าไม่มีเป้าสภาพคล่อง ใช้ RR คงที่ (0 = ไม่เข้า)
     partial_at_tp1: bool = True
     exit_on_fvg_fail: bool = True   # แท่ง M5 ปิดทะลุ FVG สวนทาง -> ปิดเอง
+    # --- ตัวเลือกจาก ICT_TopDown ---
+    persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
+    zone_cap: int = 64
+    sweep_pa_bars: int = 0          # ต้องมีแท่งกลับตัวภายในกี่แท่งจากจุดสุดของไส้ (0 = ไม่บังคับ)
+    require_reclaim: bool = False   # แท่ง MSS ต้องปิดกลับเหนือโซนที่ถูกกวาด
+    mss_vol_mult: float = 0.0       # volume แท่ง MSS > ค่าเฉลี่ย 50 แท่ง x เท่านี้ (0 = ปิด, ข้ามถ้าข้อมูลไม่มี volume)
+    entry_pa: bool = False          # รอแท่งปฏิเสธใน FVG แล้วเข้า Market (แทนการตั้ง Limit)
+    pa_wait: int = 10               # รอแท่งปฏิเสธใน FVG ได้กี่แท่ง
+    pin_wick_ratio: float = 2.0
+    max_spread_to_sl: float = 0.0   # spread / ระยะ SL สูงสุด (0 = ปิด)
+    risk_pct_london: float = 0.0    # ความเสี่ยงไม้ช่วง London (0 = ใช้ risk_pct)
+    max_daily_loss_pct: float = 0.0 # หยุดเมื่อขาดทุนของวันถึง % นี้ (0 = ปิด)
+    be_plus: float = 0.0            # กันทุนบวก (ดอลลาร์) หลังถึง TP1
     # --- ความเสี่ยง ---
     balance: float = 6000.0
     risk_pct: float = 1.0
@@ -170,6 +183,7 @@ class Side:
         self.tag = None
         self.lvl = None
         self.fired = False
+        self.cand = False
 
 
 def run(data: Data, p: Params):
@@ -215,6 +229,38 @@ def run(data: Data, p: Params):
     day_ok = False
     kz = None
     kz_end = 0
+    day_pnl = 0.0
+    day_eq0 = p.balance
+    zs_hi, zs_lo = {}, {}           # โซนที่เก็บข้ามวัน: ราคา -> tag
+    Ha, La, Ca, Oa = H, L, C, O
+
+    def pa(i, d):
+        """แท่งกลับตัว: Pin bar / Engulfing / Morning-Evening star (นิยามเดียวกับ ICT_TopDown)"""
+        o, h, l, c = Oa[i], Ha[i], La[i], Ca[i]
+        rg = h - l
+        if rg > 0:
+            bd = abs(c - o)
+            up, dn = h - max(o, c), min(o, c) - l
+            wick, opp = (dn, up) if d == 1 else (up, dn)
+            if wick >= p.pin_wick_ratio * max(bd, rg * 0.1) and wick >= 0.55 * rg and opp <= 0.25 * rg:
+                return True
+        po, pc = Oa[i - 1], Ca[i - 1]
+        cb, pb = d * (c - o), d * (po - pc)
+        if cb > 0 and pb > 0 and ((c > po and o <= pc) if d == 1 else (c < po and o >= pc)):
+            return True
+        o1, c1, r1 = Oa[i - 2], Ca[i - 2], Ha[i - 2] - La[i - 2]
+        b1 = d * (o1 - c1)
+        if r1 > 0 and b1 >= 0.5 * r1 and abs(pc - po) <= 0.3 * b1 and cb > 0:
+            mid = (o1 + c1) / 2
+            return c > mid if d == 1 else c < mid
+        return False
+
+    def prune(i):
+        for k in [k for k in zs_hi if Ha[i] > k]:
+            del zs_hi[k]
+        for k in [k for k in zs_lo if La[i] < k]:
+            del zs_lo[k]
+
     sb_win = None
     sb_done = False
     sb_tg = {}
@@ -222,10 +268,11 @@ def run(data: Data, p: Params):
     m1o, m1h, m1l, m1c, m1t = m1["open"], m1["high"], m1["low"], m1["close"], m1["time"]
 
     def close_pos(price_t, when, reason, frac_lot=None):
-        nonlocal equity, pos, day_losses
+        nonlocal equity, pos, day_losses, day_pnl
         lot = pos["lot"] if frac_lot is None else frac_lot
         pnl = (price_t - pos["entry"]) * OZ_PER_LOT * lot - p.commission * lot
         equity += pnl
+        day_pnl += pnl
         pos["pnl"] += pnl
         pos["lot"] = round(pos["lot"] - lot, 2)
         if pos["lot"] <= 1e-9:
@@ -298,6 +345,7 @@ def run(data: Data, p: Params):
         if DAY[i] != cur_day:
             cur_day = DAY[i]
             day_trades = day_losses = 0
+            day_pnl, day_eq0 = 0.0, equity
             day_start_i = i
             kz = None
             pending = None
@@ -320,7 +368,7 @@ def run(data: Data, p: Params):
                     o, h, l, c = -m1o[k], -m1l[k], -m1h[k], -m1c[k]
                     ea, xa = 0.0, p.spread
                 if pending is not None:
-                    if l + ea <= pending["entry"]:
+                    if not pending.get("wait_pa") and l + ea <= pending["entry"]:
                         pos = dict(pending, t_open=m1t[k], pnl=0.0, be=False, sl0=pending["sl"], lot0=pending["lot"])
                         pending = None
                         day_trades += 1
@@ -339,7 +387,7 @@ def run(data: Data, p: Params):
                     continue
                 if not pos["be"] and h - xa >= pos["tp1"]:
                     pos["be"] = True
-                    pos["sl"] = pos["entry"]
+                    pos["sl"] = pos["entry"] + p.be_plus
                     if p.partial_at_tp1 and pos["tp1"] < pos["tp2"]:
                         half = np.floor(pos["lot"] / 2 * 100 + 1e-9) / 100
                         if half >= 0.01:
@@ -360,7 +408,30 @@ def run(data: Data, p: Params):
             if Cd[i] < pending["fvg_lo"] or mod + tf >= pending["expire"] or p.news_block[0] <= mod + tf < p.news_block[1]:
                 pending = None
 
+        if pending is not None and pending.get("wait_pa"):
+            d = pending["d"]
+            Hd, Ld, Cd, Od = X[d]
+            pending["age"] += 1
+            if pending["age"] > p.pa_wait or Ld[i] < pending["ext"]:
+                pending = None
+            elif Ld[i] <= pending["entry"] and pa(i, d):
+                ent = Cd[i] + (p.spread if d == 1 else 0.0)   # เข้า Market ที่ราคาปิดแท่งปฏิเสธ
+                risk = ent - pending["sl"]
+                tgt = pending["tp1"] if p.tp_mode == "range" else pending["tp2"]
+                rp = p.risk_pct_london if (pending["kz"] == "LON" and p.risk_pct_london > 0) else p.risk_pct
+                lot = np.floor(equity * rp / 100 / (risk * OZ_PER_LOT) * 100 + 1e-9) / 100 if risk > 0 else 0
+                ok = (risk > 0 and tgt - ent >= p.min_rr * risk and lot >= 0.01
+                      and not (p.max_spread_to_sl > 0 and p.spread / risk > p.max_spread_to_sl)
+                      and (p.london[0] <= mod + tf <= p.london[1] or p.nyam[0] <= mod + tf <= p.nyam[1]))
+                if ok:
+                    pos = dict(pending, entry=ent, lot=lot, t_open=T5[i], pnl=0.0, be=False, sl0=pending["sl"], lot0=lot,
+                               tp1=max(pending["tp1"], ent), risk_usd=risk * OZ_PER_LOT * lot + p.commission * lot)
+                    day_trades += 1
+                pending = None
+
         if not day_ok:
+            if p.persist_zones:
+                prune(i)
             continue
         endm = mod + tf  # เวลาปิดแท่ง
         # ---------- เข้า Kill Zone: เตรียมระดับสภาพคล่อง ----------
@@ -377,6 +448,13 @@ def run(data: Data, p: Params):
                 kz_start, kz_end = (p.london if kz == "LON" else p.nyam)
                 b = bias[cur_day][0]
                 highs, lows, _, _, hi = liq(i, cur_day, day_start_i, kz == "NY")
+                if p.persist_zones:
+                    for store, new in ((zs_hi, highs), (zs_lo, lows)):
+                        for price, tag in new:
+                            store.setdefault(price, tag)
+                        while len(store) > p.zone_cap:
+                            del store[next(iter(store))]
+                    highs, lows = list(zs_hi.items()), list(zs_lo.items())
                 for d, s in sides.items():
                     mine = lows if d == 1 else highs      # ฝั่งที่จะถูกกวาด
                     opp = highs if d == 1 else lows       # เป้าหมาย
@@ -395,6 +473,8 @@ def run(data: Data, p: Params):
                             sides[1].levels.append([rl, f"WYCK{m}", mid, rh, False])
                             sides[-1].levels.append([-rh, f"WYCK{m}", -mid, -rl, False])
                             break
+        if p.persist_zones:
+            prune(i)
         # ---------- Silver Bullet: FVG แรกในชั่วโมงที่ชี้ไปทางเป้า ----------
         if p.use_silver_bullet:
             win = None
@@ -460,6 +540,7 @@ def run(data: Data, p: Params):
                 new_ext = True
             if new_ext and (s.ext is None or lo < s.ext):
                 s.ext, s.ext_i, s.fired = lo, i, False
+                s.cand = p.sweep_pa_bars > 0 and pa(i, d)
                 s.mss = None
                 for j in range(i - 1, max(i - 40, 1), -1):  # swing high ล่าสุดก่อนจุดกวาด
                     if Hd[j] > Hd[j - 1] and Hd[j] > Hd[j + 1] and Hd[j] > Cd[i]:
@@ -468,7 +549,19 @@ def run(data: Data, p: Params):
                 continue
             if s.ext is None or s.fired or s.mss is None or (i - s.ext_i) * tf > p.max_mss_min:
                 continue
+            if p.sweep_pa_bars > 0 and i - s.ext_i <= p.sweep_pa_bars and pa(i, d):
+                s.cand = True
             if Cd[i] <= s.mss:
+                continue
+            if p.require_reclaim and Cd[i] <= s.lvl[0]:
+                continue                       # ยังไม่ปิดกลับเหนือโซน: รอแท่งถัดไป
+            if p.mss_vol_mult > 0 and i >= 51:
+                av = V[i - 50:i].mean()
+                if av > 0 and V[i] <= p.mss_vol_mult * av:
+                    continue                   # volume แท่ง MSS ต่ำ: รอแท่งถัดไป
+            if p.sweep_pa_bars > 0 and not s.cand:
+                s.fired = True
+                cnt("no_pa")
                 continue
             # ---- เกิด MSS ----
             cnt("mss")
@@ -476,7 +569,8 @@ def run(data: Data, p: Params):
             if pending is not None or pos is not None:
                 cnt("busy")
                 continue
-            if day_trades >= p.max_trades_day or day_losses >= p.max_losses_day:
+            if day_trades >= p.max_trades_day or day_losses >= p.max_losses_day or \
+                    (p.max_daily_loss_pct > 0 and day_pnl <= -p.max_daily_loss_pct / 100 * day_eq0):
                 cnt("daycap")
                 continue
             if p.news_block[0] <= endm < p.news_block[1] or endm >= kz_end:
@@ -577,13 +671,19 @@ def run(data: Data, p: Params):
                     if tp1 is None:
                         tp1 = leg_high
                 tp1 = min(max(tp1, ent + risk), tp2)
-            lot = np.floor(equity * p.risk_pct / 100 / (risk * OZ_PER_LOT) * 100 + 1e-9) / 100
+            if p.max_spread_to_sl > 0 and p.spread / risk > p.max_spread_to_sl:
+                cnt("spread")
+                continue
+            rp = p.risk_pct_london if (kz == "LON" and p.risk_pct_london > 0) else p.risk_pct
+            lot = np.floor(equity * rp / 100 / (risk * OZ_PER_LOT) * 100 + 1e-9) / 100
             if lot < 0.01:
                 cnt("lot")
                 continue
             cnt("order")
             pending = dict(d=d, entry=ent, sl=sl, tp1=tp1, tp2=tp2, lot=lot, fvg_lo=fvg_lo, expire=kz_end + p.order_grace,
                            tag=lv[1], kz=kz, risk_usd=risk * OZ_PER_LOT * lot + p.commission * lot)
+            if p.entry_pa:
+                pending.update(wait_pa=True, age=0, ext=s.ext)
 
     run.funnel = funnel
     return pd.DataFrame(trades), pd.DataFrame(eq_curve, columns=["day", "equity"])
