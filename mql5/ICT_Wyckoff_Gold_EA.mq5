@@ -189,8 +189,20 @@ double Cd(const int d, const MqlRates &b) { return d == 1 ? b.close : -b.close; 
 double Od(const int d, const MqlRates &b) { return d == 1 ? b.open  : -b.open;  }
 
 //+------------------------------------------------------------------+
+// ความยาวช่วงเวลา (นาที) จากค่า HHMM สองค่า
+int WindowMin(const int fromHHMM, const int toHHMM) { return (NyMod(toHHMM) - NyMod(fromHHMM) + 1440) % 1440; }
+
 int OnInit()
   {
+   // กันค่าเวลาผิดรูปแบบ: ต้องเป็น HHMM เช่น 200 = 02:00 (ถ้าใส่ 2 จะกลายเป็น 00:02)
+   if((InpTradeLondon && WindowMin(InpLondonStart, InpLondonEnd) < 30) || (InpTradeNY && WindowMin(InpNYStart, InpNYEnd) < 30))
+     {
+      Alert("ICT_Wyckoff_Gold_EA: เวลา Kill Zone ต้องใส่แบบ HHMM เช่น London 200-500, New York 700-1000 (ค่าปัจจุบัน ",
+            InpLondonStart, "-", InpLondonEnd, " / ", InpNYStart, "-", InpNYEnd, ") กด Reset ในแท็บ Inputs");
+      return INIT_PARAMETERS_INCORRECT;
+     }
+   if(PeriodSeconds(_Period) > 900)
+      Print("ICT_Wyckoff_Gold_EA: คำเตือน - EA คิดสัญญาณจาก timeframe ของกราฟ ควรใช้ M1 / M3 / M5 (ปัจจุบัน ", EnumToString(_Period), ") บน timeframe ใหญ่แทบไม่มีสัญญาณ");
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetTypeFillingBySymbol(_Symbol);
    trade.SetDeviationInPoints(30);
