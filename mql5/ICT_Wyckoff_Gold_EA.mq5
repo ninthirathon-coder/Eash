@@ -14,6 +14,12 @@
 
 #include <Trade/Trade.mqh>
 
+enum ENUM_FIB_SET
+  {
+   FIB_SET_OTE     = 0, // ชุด OTE: 0, 0.21, 0.295, 0.38, 0.5, 0.62, 0.705, 0.79, 1, -0.27, 1.27
+   FIB_SET_QUARTER = 1  // ชุด Quarter: 0, 0.25, 0.5, 0.75, 1 พร้อมขอบ Buy/Sell ห่าง 0.059
+  };
+
 input group "=== เวลา (ใส่เป็นเวลานิวยอร์ก HHMM) ==="
 input int    InpServerMinusNY = 7;      // เวลาเซิร์ฟเวอร์โบรกเกอร์ ลบ เวลานิวยอร์ก (ชม.) โบรก GMT+2/+3 = 7
 input int    InpAsiaStart     = 2000;   // Asia เริ่ม
@@ -83,6 +89,7 @@ input bool   InpFibNeedFvg    = false;  // โซน 0.62-0.79 ต้องม�
 input bool   InpFibTp         = false;  // TP1 = ระดับ 0 (ปลายขา), TP2 = ระดับส่วนขยาย
 input double InpFibTpExt      = 0.27;   // ส่วนขยายของ TP2 (0.27 = ระดับ -0.27)
 input bool   InpDrawFib       = false;  // วาด Fibonacci ของขา TF ใหญ่และ TF เล็กบนกราฟ
+input ENUM_FIB_SET InpFibSet  = FIB_SET_OTE; // ชุดระดับที่ใช้วาด
 
 input group "=== ตัวเลือกจาก ICT_TopDown (ปิดไว้เป็นค่าเริ่มต้น) ==="
 input bool   InpPersistZones  = false;  // เก็บโซนข้ามวันจนกว่าจะถูกแตะ
@@ -411,18 +418,49 @@ void DrawFib(const string id, const datetime t1, const double p1, const datetime
    ObjectDelete(0, nm);
    if(!ObjectCreate(0, nm, OBJ_FIBO, 0, t1, p1, t2, p2))
       return;
-   double lv[11]  = {0, 0.21, 0.295, 0.38, 0.5, 0.62, 0.705, 0.79, 1, -0.27, 1.27};
-   color  lc[11]  = {clrGray, clrYellow, clrYellow, clrYellow, clrRed, clrDodgerBlue, clrDodgerBlue, clrDodgerBlue, clrGray, clrGray, clrSilver};
+   double lv[];
+   color  lc[];
+   string lt[];
+   if(InpFibSet == FIB_SET_QUARTER)
+     {
+      double v[14] = {-0.059, 0.059, 0.191, 0.25, 0.309, 0.441, 0.5, 0.559, 0.691, 0.75, 0.809, 0.941, 1, 1.059};
+      string t[14] = {"Buy(Demand)", "Sell(Supply)", "Buy(Demand)", "", "Sell(Demand)", "Buy(Demand)", "EQ", "Sell(Supply)",
+                      "Buy(Supply)", "", "Sell(Supply)", "Buy(Supply)", "", "Sell(Supply)"};
+      ArrayResize(lv, 14);
+      ArrayResize(lc, 14);
+      ArrayResize(lt, 14);
+      for(int k = 0; k < 14; k++)
+        {
+         lv[k] = v[k];
+         lt[k] = t[k];
+         lc[k] = StringFind(t[k], "Buy") == 0 ? clrDodgerBlue : StringFind(t[k], "Sell") == 0 ? clrTomato : t[k] == "EQ" ? clrGold : clrGray;
+        }
+     }
+   else
+     {
+      double v[11] = {0, 0.21, 0.295, 0.38, 0.5, 0.62, 0.705, 0.79, 1, -0.27, 1.27};
+      color  c[11] = {clrGray, clrYellow, clrYellow, clrYellow, clrRed, clrDodgerBlue, clrDodgerBlue, clrDodgerBlue, clrGray, clrGray, clrSilver};
+      ArrayResize(lv, 11);
+      ArrayResize(lc, 11);
+      ArrayResize(lt, 11);
+      for(int k = 0; k < 11; k++)
+        {
+         lv[k] = v[k];
+         lc[k] = c[k];
+         lt[k] = "";
+        }
+     }
+   int nl = ArraySize(lv);
    ObjectSetInteger(0, nm, OBJPROP_COLOR, clrGray);
    ObjectSetInteger(0, nm, OBJPROP_STYLE, STYLE_DOT);
    ObjectSetInteger(0, nm, OBJPROP_RAY_RIGHT, true);
-   ObjectSetInteger(0, nm, OBJPROP_LEVELS, 11);
-   for(int k = 0; k < 11; k++)
+   ObjectSetInteger(0, nm, OBJPROP_LEVELS, nl);
+   for(int k = 0; k < nl; k++)
      {
       ObjectSetDouble(0, nm, OBJPROP_LEVELVALUE, k, lv[k]);
       ObjectSetInteger(0, nm, OBJPROP_LEVELCOLOR, k, lc[k]);
       ObjectSetInteger(0, nm, OBJPROP_LEVELSTYLE, k, STYLE_SOLID);
-      ObjectSetString(0, nm, OBJPROP_LEVELTEXT, k, DoubleToString(lv[k], 3) + "  %$");
+      ObjectSetString(0, nm, OBJPROP_LEVELTEXT, k, (lt[k] == "" ? "" : lt[k] + "  ") + DoubleToString(lv[k], 3) + "  %$");
      }
   }
 
