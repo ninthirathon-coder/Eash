@@ -97,6 +97,9 @@ class Params:
     ob_rr: float = 3.0              # TP = RR คงที่ (เท่าของความเสี่ยง)
     ob_need_sweep: bool = True      # ต้องแทงทะลุขอบโซนก่อน (false = แค่แตะโซนแล้วมีแท่งกลับตัว)
     ob_max_depth: float = 0.0       # แทงเลยโซนได้ไม่เกินกี่เท่าของความสูงโซน (0 = ไม่จำกัด)
+    ob_steps: int = 0               # ยืนยันกลับตัวบน TF เล็ก: ต้องปิดทะลุ swing high ก่อนจุดต่ำสุดกี่ขั้น (0 = ใช้แท่งปิดกลับเข้าโซน)
+    ob_step_strength: int = 2       # ความแรง swing ของแต่ละขั้น (แท่งซ้าย/ขวา)
+    ob_max_entry: float = 1.0       # โหมดขั้น: จุดเข้าอยู่เหนือขอบบนโซนได้ไม่เกินกี่เท่าของความสูงโซน
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -631,7 +634,7 @@ def run(data: Data, p: Params):
             while ob_ptr < len(ob_list) and ob_list[ob_ptr][0] <= tnow:
                 _, d_, zl, zh = ob_list[ob_ptr]
                 ob_ptr += 1
-                ob_act.append([d_, zl, zh, tnow, False, None] if d_ == 1 else [d_, -zh, -zl, tnow, False, None])
+                ob_act.append([d_, zl, zh, tnow, False, None, -1, None] if d_ == 1 else [d_, -zh, -zl, tnow, False, None, -1, None])
                 same = [z for z in ob_act if z[0] == d_]
                 if len(same) > p.ob_max_zones:
                     ob_act.remove(same[0])
@@ -645,7 +648,17 @@ def run(data: Data, p: Params):
                 touched = Ld[i] < z[1] if p.ob_need_sweep else Ld[i] <= z[2]
                 if touched:
                     z[4] = True
-                    z[5] = Ld[i] if z[5] is None else min(z[5], Ld[i])
+                if z[4] and (z[5] is None or Ld[i] < z[5]):
+                    z[5], z[6], z[7] = Ld[i], i, None      # จุดต่ำสุดใหม่: หาขั้นใหม่
+                    if p.ob_steps > 0:
+                        st_, found, last = p.ob_step_strength, 0, -np.inf
+                        for j in range(i - st_ - 1, max(i - 180, st_), -1):
+                            if Hd[j] > last and Hd[j] > Hd[j - st_:j].max() and Hd[j] > Hd[j + 1:j + st_ + 1].max():
+                                last = Hd[j]
+                                found += 1
+                                if found == p.ob_steps:
+                                    z[7] = last
+                                    break
                 if not z[4] or pos is not None or pending is not None or i < 22:
                     continue
                 if not (p.ob_window[0] <= endm <= p.ob_window[1]):
@@ -657,7 +670,10 @@ def run(data: Data, p: Params):
                 if p.ob_max_depth > 0 and z[1] - z[5] > p.ob_max_depth * hgt:
                     ob_act.remove(z)        # แทงลึกเกิน = โซนแตก
                     continue
-                if not (z[1] < Cd[i] <= z[2] + 0.25 * hgt and Cd[i] > Od[i]):
+                if p.ob_steps > 0:
+                    if z[7] is None or i <= z[6] or Cd[i] <= z[7] or Cd[i] <= z[1] or Cd[i] > z[2] + p.ob_max_entry * hgt:
+                        continue            # ต้องปิดทะลุครบทุกขั้น และยังไม่ไกลจากโซนเกินไป
+                elif not (z[1] < Cd[i] <= z[2] + 0.25 * hgt and Cd[i] > Od[i]):
                     continue                # ต้องปิดกลับเข้าโซนด้วยแท่งตามทิศ
                 A = rng5[i - 20:i].mean()
                 ent = Cd[i] + (p.spread if d_ == 1 else 0.0)
