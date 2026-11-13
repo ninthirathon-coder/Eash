@@ -79,7 +79,7 @@ input bool   InpExitOnFvgFail = true;   // แท่งปิดทะลุ FVG
 
 input group "=== Fibonacci: TF ใหญ่บอกเทรนด์หลัก, TF เล็กหาจังหวะเข้า ==="
 input bool   InpHtfFib        = false;  // TF ใหญ่: เทรดตามเทรนด์หลัก และราคาต้องย่อเข้าโซนของขาใหญ่
-input ENUM_TIMEFRAMES InpHtfTF = PERIOD_H4; // TF ใหญ่ที่ใช้ตี Fibonacci
+input ENUM_TIMEFRAMES InpHtfTF = PERIOD_H1; // TF ใหญ่หลักที่ใช้ตี Fibonacci / Quarter Zone
 input int    InpHtfStrength   = 3;      // ความแรง swing บน TF ใหญ่ (แท่งซ้าย/ขวา)
 input double InpHtfMinRetr    = 0.5;    // ราคาต้องย่ออย่างน้อยระดับนี้ของขาใหญ่ (0.5 = ครึ่ง Discount/Premium, 0 = ดูเทรนด์อย่างเดียว)
 input double InpHtfMaxRetr    = 1.0;    // ราคาย่อได้ไม่เกินระดับนี้
@@ -90,6 +90,9 @@ input bool   InpFibTp         = false;  // TP1 = ระดับ 0 (ปลาย
 input double InpFibTpExt      = 0.27;   // ส่วนขยายของ TP2 (0.27 = ระดับ -0.27)
 input bool   InpQuarterZones  = false;  // Quarter Zone: ขอบกรอบ 0/0.25/0.5/0.75/1 ของขา TF ใหญ่เป็นจุดรอ แล้วยืนยันบน TF เล็ก
 input double InpQzBand        = 0.059;  // Quarter Zone: ขอบกรอบห่างจากเส้นกลาง (สัดส่วนของขา)
+input ENUM_TIMEFRAMES InpQzConfTF1 = PERIOD_H4;  // Quarter Zone: TF ที่ดูควบตัวที่ 1
+input ENUM_TIMEFRAMES InpQzConfTF2 = PERIOD_M15; // Quarter Zone: TF ที่ดูควบตัวที่ 2
+input int    InpQzMinConf     = 0;      // Quarter Zone: ขอบของ TF หลักต้องอยู่ในกรอบของ TF ควบอย่างน้อยกี่ TF (0 = ไม่ดูควบ)
 input bool   InpQzMidTrend    = true;   // Quarter Zone: กรอบ 0.5 เข้าตามเทรนด์หลักของ TF ใหญ่เท่านั้น
 input bool   InpQzCtLtf       = true;   // Quarter Zone: ไม้สวนเทรนด์หลักใช้ TP ตามขาของ TF เล็ก (ระดับ 0 และส่วนขยาย)
 input bool   InpDrawFib       = false;  // วาด Fibonacci ของขา TF ใหญ่และ TF เล็กบนกราฟ
@@ -897,21 +900,24 @@ void SetupKillZone(const int i)
 //| เป้า: TP1 = ขอบอีกฝั่งของกรอบเดียวกัน, TP2 = ขอบของกรอบถัดไป           |
 //| ต้องมีการยืนยันบน TF เล็ก (กวาดขอบ -> MSS -> FVG) จึงเข้า             |
 //+------------------------------------------------------------------+
-void AddQuarterZones(const int i)
+// กรอบของ TF ที่ระบุ: swing low และ swing high ล่าสุดที่ยืนยันแล้ว
+bool QzRange(const ENUM_TIMEFRAMES tf, const int i, double &lo, double &hi, datetime &loT, datetime &hiT)
   {
    MqlRates h[];
-   int n = CopyRates(_Symbol, InpHtfTF, 0, 330, h);
+   int n = CopyRates(_Symbol, tf, 0, 330, h);
    if(n < 40)
-      return;
+      return false;
    ArraySetAsSeries(h, false);
-   long ps = PeriodSeconds(InpHtfTF);
+   long ps = PeriodSeconds(tf);
    datetime bucket = (datetime)(r[i].time - r[i].time % ps);
    int cut = n;
    while(cut > 0 && h[cut - 1].time >= bucket)
       cut--;
    int st = InpHtfStrength;
-   double lo = 0, hi = 0;
-   datetime loT = 0, hiT = 0;
+   lo = 0;
+   hi = 0;
+   loT = 0;
+   hiT = 0;
    bool hasLo = false, hasHi = false;
    for(int k = cut - st - 1; k > MathMax(cut - 300, st) && !(hasLo && hasHi); k--)
      {
@@ -936,7 +942,55 @@ void AddQuarterZones(const int i)
          hasLo = true;
         }
      }
-   if(!hasLo || !hasHi || hi <= lo)
+   return hasLo && hasHi && hi > lo;
+  }
+
+// จำนวน TF ควบที่ราคานี้อยู่ในกรอบ Quarter ฝั่งเดียวกัน (Buy: กรอบ 0-0.5, Sell: กรอบ 0.5-1)
+int QzConf(const int i, const double price, const int d)
+  {
+   ENUM_TIMEFRAMES tfs[2];
+   tfs[0] = InpQzConfTF1;
+   tfs[1] = InpQzConfTF2;
+   int cnt = 0;
+   for(int t = 0; t < 2; t++)
+     {
+      if(tfs[t] == PERIOD_CURRENT || tfs[t] == InpHtfTF || (t == 1 && tfs[1] == tfs[0]))
+         continue;
+      double lo, hi;
+      datetime loT, hiT;
+      if(!QzRange(tfs[t], i, lo, hi, loT, hiT))
+         continue;
+      double pos = (price - lo) / (hi - lo);
+      for(int k = 0; k < 3; k++)
+        {
+         double c = (d == 1) ? 0.25 * k : 0.5 + 0.25 * k;
+         if(MathAbs(pos - c) <= InpQzBand)
+           {
+            cnt++;
+            break;
+           }
+        }
+     }
+   return cnt;
+  }
+
+// ดูควบหลาย TF: ลบขอบ Quarter Zone ที่ไม่ตรงกับกรอบของ TF ควบ
+void QzFilterConf(const int i)
+  {
+   for(int si = 0; si < 2; si++)
+     {
+      int d = g_s[si].d;
+      for(int k = ArraySize(g_s[si].lv) - 1; k >= 0; k--)
+         if(g_s[si].lv[k].tag == TAG_QZ && QzConf(i, d * g_s[si].lv[k].price, d) < InpQzMinConf)
+            ArrayRemove(g_s[si].lv, k, 1);
+     }
+  }
+
+void AddQuarterZones(const int i)
+  {
+   double lo, hi;
+   datetime loT, hiT;
+   if(!QzRange(InpHtfTF, i, lo, hi, loT, hiT))
       return;
    double rg = hi - lo, b = InpQzBand, px = r[i - 1].close;
    double retr;
@@ -972,6 +1026,8 @@ void AddQuarterZones(const int i)
       if(px < lo + (0.5 - b) * rg)
          AddLevel(g_s[1], -(lo + (0.5 - b) * rg), TAG_QZ, -(lo + (0.25 + b) * rg), -(lo + (0.25 - b) * rg));
      }
+   if(InpQzMinConf > 0)
+      QzFilterConf(i);
    // วาดกรอบ: ระดับ 0 ที่ swing low, ระดับ 1 ที่ swing high
    DrawFib("Q", hiT, hi, loT, lo);
   }

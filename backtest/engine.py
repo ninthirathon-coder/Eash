@@ -69,7 +69,7 @@ class Params:
     exit_on_fvg_fail: bool = True   # แท่ง M5 ปิดทะลุ FVG สวนทาง -> ปิดเอง
     # --- Fibonacci: TF ใหญ่บอกเทรนด์หลัก, TF เล็กหาจังหวะเข้า ---
     htf_fib: bool = False           # ใช้ Fibonacci ของ swing บน TF ใหญ่เป็นตัวกรองเทรนด์หลัก + โซนราคา
-    htf_tf: int = 240               # TF ใหญ่ (นาที)
+    htf_tf: int = 60                # TF ใหญ่หลัก (นาที)
     htf_strength: int = 3           # ความแรง swing บน TF ใหญ่
     htf_min_retr: float = 0.5       # ราคาต้องย่อเข้ามาอย่างน้อยเท่านี้ของขาใหญ่ (0.5 = ครึ่ง Discount/Premium)
     htf_max_retr: float = 1.0
@@ -83,6 +83,8 @@ class Params:
     qz_mid_trend: bool = True       # กรอบ 0.5 เข้าตามเทรนด์หลักของ TF ใหญ่เท่านั้น (ไม่มองเป็นจุดกลับตัว)
     qz_ct_ltf: bool = True          # ไม้สวนเทรนด์หลัก: TP ตามขาของ TF เล็ก (ระดับ 0 และ -0.27) แทนกรอบ TF ใหญ่
     qz_all_ltf: bool = False        # ทุกไม้ใช้ TP ตามขาของ TF เล็ก
+    qz_conf_tfs: tuple = ()         # TF อื่นที่ดูควบกัน (นาที) เช่น (240, 15): ขอบของ TF หลักต้องอยู่ในกรอบของ TF เหล่านี้ด้วย
+    qz_min_conf: int = 1            # ต้องตรงกับ TF อื่นอย่างน้อยกี่ TF
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -253,21 +255,44 @@ def run(data: Data, p: Params):
                 return trend, (hi_ - X[d][2][i]) / (hi_ - lo), lo, hi_
         return trend, None, None, None
 
-    def qz_range(i):
-        """กรอบของ TF ใหญ่: swing low และ swing high ล่าสุดที่ยืนยันแล้ว คืน (low, high) หรือ None"""
-        cut = np.searchsorted(htk, hk[i])
+    tfb = {p.htf_tf: (htk, htH, htL)}
+    for m_ in p.qz_conf_tfs:
+        if m_ not in tfb:
+            k_ = T5.astype("datetime64[m]").astype("int64") // m_
+            g_ = pd.DataFrame({"k": k_, "high": H, "low": L}).groupby("k").agg(high=("high", "max"), low=("low", "min"))
+            tfb[m_] = (g_.index.to_numpy(), g_.high.to_numpy(), g_.low.to_numpy())
+
+    def qz_range(i, m=None):
+        """กรอบของ TF m: swing low และ swing high ล่าสุดที่ยืนยันแล้ว คืน (low, high) หรือ None"""
+        m = m or p.htf_tf
+        tk_, tH_, tL_ = tfb[m]
+        cut = np.searchsorted(tk_, T5[i].astype("datetime64[m]").astype("int64") // m)
         st = p.htf_strength
         lo = hi_ = None
         for k in range(cut - st - 1, max(cut - 300, st), -1):
-            if hi_ is None and htH[k] > htH[k - st:k].max() and htH[k] > htH[k + 1:k + st + 1].max():
-                hi_ = htH[k]
-            if lo is None and htL[k] < htL[k - st:k].min() and htL[k] < htL[k + 1:k + st + 1].min():
-                lo = htL[k]
+            if hi_ is None and tH_[k] > tH_[k - st:k].max() and tH_[k] > tH_[k + 1:k + st + 1].max():
+                hi_ = tH_[k]
+            if lo is None and tL_[k] < tL_[k - st:k].min() and tL_[k] < tL_[k + 1:k + st + 1].min():
+                lo = tL_[k]
             if lo is not None and hi_ is not None:
                 break
         if lo is None or hi_ is None or hi_ <= lo:
             return None
         return lo, hi_
+
+    def qz_conf(i, price, d):
+        """จำนวน TF อื่นที่ราคานี้อยู่ในกรอบ Quarter ฝั่งเดียวกัน (Buy: กรอบ 0-0.5, Sell: กรอบ 0.5-1)"""
+        n_ = 0
+        for m_ in p.qz_conf_tfs:
+            rg = qz_range(i, m_)
+            if rg is None:
+                continue
+            pos = (price - rg[0]) / (rg[1] - rg[0])
+            for c in ((0.0, 0.25, 0.5) if d == 1 else (0.5, 0.75, 1.0)):
+                if abs(pos - c) <= p.qz_band:
+                    n_ += 1
+                    break
+        return n_
 
     wy = {}  # แท่งของแต่ละ timeframe ที่ใช้หากรอบ Wyckoff
     for m in p.wy_tfs:
@@ -563,6 +588,10 @@ def run(data: Data, p: Params):
                     for e_, t1, t2 in ((0.5 + b_, 0.5 - b_, 0.25 + b_), (0.5 - b_, 0.25 + b_, 0.25 - b_)):
                         if px < P(e_):
                             sides[-1].levels.append([-P(e_), "QZ", -P(t1), -P(t2), False, p.qz_all_ltf])
+                if p.qz_conf_tfs:               # ดูควบหลาย TF: เก็บเฉพาะขอบที่ตรงกับกรอบของ TF อื่น
+                    for d_ in (1, -1):
+                        sides[d_].levels = [lv for lv in sides[d_].levels
+                                            if lv[1] != "QZ" or qz_conf(i, d_ * lv[0], d_) >= p.qz_min_conf]
         if p.persist_zones:
             prune(i)
         # ---------- Silver Bullet: FVG แรกในชั่วโมงที่ชี้ไปทางเป้า ----------
