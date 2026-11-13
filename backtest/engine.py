@@ -77,6 +77,9 @@ class Params:
     fib_entry: float = 0.705
     fib_need_fvg: bool = False      # โซน 0.62-0.79 ต้องมี FVG ซ้อนอยู่
     fib_tp_ext: float = 0.27        # tp_mode="fib": TP1 = ระดับ 0, TP2 = ระดับ -0.27
+    # --- Quarter Zone: กรอบ 0 / 0.25 / 0.5 / 0.75 / 1 ของขา TF ใหญ่ (ใช้ htf_tf, htf_strength) ---
+    quarter_zones: bool = False     # ขอบกรอบเป็นระดับที่รอให้ราคามาแตะ แล้วยืนยันบน TF เล็ก (กวาด -> MSS -> FVG)
+    qz_band: float = 0.059          # ขอบกรอบห่างจากเส้นกลางเท่านี้ของขา
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -194,6 +197,7 @@ class Side:
         self.lvl = None
         self.fired = False
         self.cand = False
+        self.qz_done = False
 
 
 def run(data: Data, p: Params):
@@ -245,6 +249,22 @@ def run(data: Data, p: Params):
                     return trend, None, lo, hi_
                 return trend, (hi_ - X[d][2][i]) / (hi_ - lo), lo, hi_
         return trend, None, None, None
+
+    def qz_range(i):
+        """กรอบของ TF ใหญ่: swing low และ swing high ล่าสุดที่ยืนยันแล้ว คืน (low, high) หรือ None"""
+        cut = np.searchsorted(htk, hk[i])
+        st = p.htf_strength
+        lo = hi_ = None
+        for k in range(cut - st - 1, max(cut - 300, st), -1):
+            if hi_ is None and htH[k] > htH[k - st:k].max() and htH[k] > htH[k + 1:k + st + 1].max():
+                hi_ = htH[k]
+            if lo is None and htL[k] < htL[k - st:k].min() and htL[k] < htL[k + 1:k + st + 1].min():
+                lo = htL[k]
+            if lo is not None and hi_ is not None:
+                break
+        if lo is None or hi_ is None or hi_ <= lo:
+            return None
+        return lo, hi_
 
     wy = {}  # แท่งของแต่ละ timeframe ที่ใช้หากรอบ Wyckoff
     for m in p.wy_tfs:
@@ -516,6 +536,20 @@ def run(data: Data, p: Params):
                             sides[1].levels.append([rl, f"WYCK{m}", mid, rh, False])
                             sides[-1].levels.append([-rh, f"WYCK{m}", -mid, -rl, False])
                             break
+        if p.quarter_zones and kz is not None and not sides[1].qz_done:
+            sides[1].qz_done = True
+            rg = qz_range(i)
+            if rg is not None and i > 0:
+                lo_, hi_ = rg
+                r_, b_, px = hi_ - lo_, p.qz_band, C[i - 1]
+                for c in (0.0, 0.25, 0.5):      # ขอบล่างของกรอบฝั่ง Discount = จุดหา Buy, เป้า = กรอบถัดไปด้านบน
+                    e_ = lo_ + (c - b_) * r_
+                    if px > e_:
+                        sides[1].levels.append([e_, "QZ", lo_ + (c + b_) * r_, lo_ + (c + 0.25 - b_) * r_, False])
+                for c in (0.5, 0.75, 1.0):      # ขอบบนของกรอบฝั่ง Premium = จุดหา Sell, เป้า = กรอบถัดไปด้านล่าง
+                    e_ = lo_ + (c + b_) * r_
+                    if px < e_:
+                        sides[-1].levels.append([-e_, "QZ", -(lo_ + (c - b_) * r_), -(lo_ + (c - 0.25 + b_) * r_), False])
         if p.persist_zones:
             prune(i)
         # ---------- Silver Bullet: FVG แรกในชั่วโมงที่ชี้ไปทางเป้า ----------
@@ -707,7 +741,7 @@ def run(data: Data, p: Params):
                 edge = Hd[j:e + 1].max()
                 tp2 = edge if edge > tp1 else tp1
             else:
-                if lv[1].startswith("WYCK"):
+                if lv[2] is not None:              # Wyckoff / Quarter Zone: เป้ากำหนดมากับระดับ
                     tp1, tp2 = lv[2], lv[3]
                     if tp2 - ent < p.min_rr * risk:
                         cnt("wy_rr")

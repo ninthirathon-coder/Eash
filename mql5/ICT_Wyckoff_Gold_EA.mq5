@@ -88,6 +88,8 @@ input double InpFibEntry      = 0.705;  // ระดับเข้า
 input bool   InpFibNeedFvg    = false;  // โซน 0.62-0.79 ต้องมี FVG ซ้อนอยู่
 input bool   InpFibTp         = false;  // TP1 = ระดับ 0 (ปลายขา), TP2 = ระดับส่วนขยาย
 input double InpFibTpExt      = 0.27;   // ส่วนขยายของ TP2 (0.27 = ระดับ -0.27)
+input bool   InpQuarterZones  = false;  // Quarter Zone: ขอบกรอบ 0/0.25/0.5/0.75/1 ของขา TF ใหญ่เป็นจุดรอ แล้วยืนยันบน TF เล็ก
+input double InpQzBand        = 0.059;  // Quarter Zone: ขอบกรอบห่างจากเส้นกลาง (สัดส่วนของขา)
 input bool   InpDrawFib       = false;  // วาด Fibonacci ของขา TF ใหญ่และ TF เล็กบนกราฟ
 input ENUM_FIB_SET InpFibSet  = FIB_SET_OTE; // ชุดระดับที่ใช้วาด
 
@@ -120,6 +122,7 @@ input long   InpMagic         = 20261111;
 #define TAG_SWING 4
 #define TAG_WYCK  5
 #define TAG_SB    6
+#define TAG_QZ    7
 
 struct SLevel
   {
@@ -879,6 +882,71 @@ void SetupKillZone(const int i)
            }
         }
      }
+   if(InpQuarterZones && i > 0)
+      AddQuarterZones(i);
+  }
+
+//+------------------------------------------------------------------+
+//| Quarter Zone: กรอบของ TF ใหญ่ = swing low / swing high ล่าสุด        |
+//| ขอบล่างของกรอบฝั่ง Discount (ต่ำกว่า 0.5) = จุดหา Buy               |
+//| ขอบบนของกรอบฝั่ง Premium (สูงกว่า 0.5) = จุดหา Sell                  |
+//| เป้า: TP1 = ขอบอีกฝั่งของกรอบเดียวกัน, TP2 = ขอบของกรอบถัดไป           |
+//| ต้องมีการยืนยันบน TF เล็ก (กวาดขอบ -> MSS -> FVG) จึงเข้า             |
+//+------------------------------------------------------------------+
+void AddQuarterZones(const int i)
+  {
+   MqlRates h[];
+   int n = CopyRates(_Symbol, InpHtfTF, 0, 330, h);
+   if(n < 40)
+      return;
+   ArraySetAsSeries(h, false);
+   long ps = PeriodSeconds(InpHtfTF);
+   datetime bucket = (datetime)(r[i].time - r[i].time % ps);
+   int cut = n;
+   while(cut > 0 && h[cut - 1].time >= bucket)
+      cut--;
+   int st = InpHtfStrength;
+   double lo = 0, hi = 0;
+   datetime loT = 0, hiT = 0;
+   bool hasLo = false, hasHi = false;
+   for(int k = cut - st - 1; k > MathMax(cut - 300, st) && !(hasLo && hasHi); k--)
+     {
+      bool isH = true, isL = true;
+      for(int q = 1; q <= st; q++)
+        {
+         if(!(h[k].high > h[k - q].high && h[k].high > h[k + q].high))
+            isH = false;
+         if(!(h[k].low < h[k - q].low && h[k].low < h[k + q].low))
+            isL = false;
+        }
+      if(isH && !hasHi)
+        {
+         hi = h[k].high;
+         hiT = h[k].time;
+         hasHi = true;
+        }
+      if(isL && !hasLo)
+        {
+         lo = h[k].low;
+         loT = h[k].time;
+         hasLo = true;
+        }
+     }
+   if(!hasLo || !hasHi || hi <= lo)
+      return;
+   double rg = hi - lo, b = InpQzBand, px = r[i - 1].close;
+   double cb[3] = {0.0, 0.25, 0.5}, cs[3] = {0.5, 0.75, 1.0};
+   for(int k = 0; k < 3; k++)
+     {
+      double e = lo + (cb[k] - b) * rg;                 // ขอบล่างของกรอบ -> Buy
+      if(px > e)
+         AddLevel(g_s[0], e, TAG_QZ, lo + (cb[k] + b) * rg, lo + (cb[k] + 0.25 - b) * rg);
+      e = lo + (cs[k] + b) * rg;                        // ขอบบนของกรอบ -> Sell
+      if(px < e)
+         AddLevel(g_s[1], -e, TAG_QZ, -(lo + (cs[k] - b) * rg), -(lo + (cs[k] - 0.25 + b) * rg));
+     }
+   // วาดกรอบ: ระดับ 0 ที่ swing low, ระดับ 1 ที่ swing high
+   DrawFib("Q", hiT, hi, loT, lo);
   }
 
 //+------------------------------------------------------------------+
@@ -1067,7 +1135,7 @@ void TrySetup(SSide &s, const int i, const int endm)
      }
    else
      {
-      if(s.lv[s.lvl].tag == TAG_WYCK)
+      if(s.lv[s.lvl].tag == TAG_WYCK || s.lv[s.lvl].tag == TAG_QZ)
         {
          tp1 = s.lv[s.lvl].tp1;                     // กลางกรอบ
          tp2 = s.lv[s.lvl].tp2;                     // ขอบกรอบฝั่งตรงข้าม
