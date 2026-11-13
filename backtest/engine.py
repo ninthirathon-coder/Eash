@@ -407,8 +407,12 @@ def run(data: Data, p: Params):
     sw_sets = []
     if p.ob_model and p.ob_sw_min > 0:
         for m_ in p.ob_sw_tfs:
-            k_ = T5.astype("datetime64[m]").astype("int64") // m_
-            g_ = pd.DataFrame({"k": k_, "c": C}).groupby("k").c.last()
+            if m_ < tf:                     # TF เล็กกว่าข้อมูลสัญญาณ: ใช้แท่ง M1
+                k_ = m1["time"].astype("datetime64[m]").astype("int64") // m_
+                g_ = pd.DataFrame({"k": k_, "c": m1["close"]}).groupby("k").c.last()
+            else:
+                k_ = T5.astype("datetime64[m]").astype("int64") // m_
+                g_ = pd.DataFrame({"k": k_, "c": C}).groupby("k").c.last()
             c_ = g_.to_numpy()
             n_ = p.ob_sw_bars
             er = np.full(len(c_), np.nan)

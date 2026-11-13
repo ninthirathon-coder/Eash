@@ -61,6 +61,7 @@ input int    InpObSwMin       = 3;      // ตัด setup หลอก: ถ้�
 input ENUM_TIMEFRAMES InpSwTF1 = PERIOD_M5;  // sideway: TF ที่ 1
 input ENUM_TIMEFRAMES InpSwTF2 = PERIOD_M15; // sideway: TF ที่ 2
 input ENUM_TIMEFRAMES InpSwTF3 = PERIOD_M30; // sideway: TF ที่ 3
+input ENUM_TIMEFRAMES InpSwTF4 = PERIOD_CURRENT; // sideway: TF ที่ 4 (current = ไม่ใช้, เลือก M1 เพื่อดู M1 ด้วย)
 input int    InpSwBars        = 20;     // sideway: จำนวนแท่งที่ใช้วัด
 input double InpSwEr          = 0.3;    // sideway: efficiency ratio ต่ำกว่านี้ = sideway (ราคาไปได้สุทธิ / ระยะที่แกว่งทั้งหมด)
 input int    InpObSetupMaxH   = 12;     // ยืนยันกลับตัว: ต้องเกิดภายในกี่ชั่วโมงหลังแทงโซน
@@ -1679,12 +1680,13 @@ bool IsSideway(const ENUM_TIMEFRAMES tf)
 
 int SidewayCount()
   {
-   ENUM_TIMEFRAMES tfs[3];
+   ENUM_TIMEFRAMES tfs[4];
    tfs[0] = InpSwTF1;
    tfs[1] = InpSwTF2;
    tfs[2] = InpSwTF3;
+   tfs[3] = InpSwTF4;
    int n = 0;
-   for(int t = 0; t < 3; t++)
+   for(int t = 0; t < 4; t++)
       if(tfs[t] != PERIOD_CURRENT && IsSideway(tfs[t]))
          n++;
    return n;
