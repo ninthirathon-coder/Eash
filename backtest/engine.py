@@ -80,6 +80,9 @@ class Params:
     # --- Quarter Zone: กรอบ 0 / 0.25 / 0.5 / 0.75 / 1 ของขา TF ใหญ่ (ใช้ htf_tf, htf_strength) ---
     quarter_zones: bool = False     # ขอบกรอบเป็นระดับที่รอให้ราคามาแตะ แล้วยืนยันบน TF เล็ก (กวาด -> MSS -> FVG)
     qz_band: float = 0.059          # ขอบกรอบห่างจากเส้นกลางเท่านี้ของขา
+    qz_mid_trend: bool = True       # กรอบ 0.5 เข้าตามเทรนด์หลักของ TF ใหญ่เท่านั้น (ไม่มองเป็นจุดกลับตัว)
+    qz_ct_ltf: bool = True          # ไม้สวนเทรนด์หลัก: TP ตามขาของ TF เล็ก (ระดับ 0 และ -0.27) แทนกรอบ TF ใหญ่
+    qz_all_ltf: bool = False        # ทุกไม้ใช้ TP ตามขาของ TF เล็ก
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -542,14 +545,24 @@ def run(data: Data, p: Params):
             if rg is not None and i > 0:
                 lo_, hi_ = rg
                 r_, b_, px = hi_ - lo_, p.qz_band, C[i - 1]
-                for c in (0.0, 0.25, 0.5):      # ขอบล่างของกรอบฝั่ง Discount = จุดหา Buy, เป้า = กรอบถัดไปด้านบน
-                    e_ = lo_ + (c - b_) * r_
-                    if px > e_:
-                        sides[1].levels.append([e_, "QZ", lo_ + (c + b_) * r_, lo_ + (c + 0.25 - b_) * r_, False])
-                for c in (0.5, 0.75, 1.0):      # ขอบบนของกรอบฝั่ง Premium = จุดหา Sell, เป้า = กรอบถัดไปด้านล่าง
-                    e_ = lo_ + (c + b_) * r_
-                    if px < e_:
-                        sides[-1].levels.append([-e_, "QZ", -(lo_ + (c - b_) * r_), -(lo_ + (c - 0.25 + b_) * r_), False])
+                trend = htf_fib(i, 1)[0]
+                P = lambda v: lo_ + v * r_
+                for c in ((0.0, 0.25) if p.qz_mid_trend else (0.0, 0.25, 0.5)):   # ขอบล่างฝั่ง Discount -> Buy
+                    if px > P(c - b_):
+                        sides[1].levels.append([P(c - b_), "QZ", P(c + b_), P(c + 0.25 - b_), False,
+                                                p.qz_all_ltf or (p.qz_ct_ltf and trend == -1)])
+                for c in ((0.75, 1.0) if p.qz_mid_trend else (0.5, 0.75, 1.0)):   # ขอบบนฝั่ง Premium -> Sell
+                    if px < P(c + b_):
+                        sides[-1].levels.append([-P(c + b_), "QZ", -P(c - b_), -P(c - 0.25 + b_), False,
+                                                 p.qz_all_ltf or (p.qz_ct_ltf and trend == 1)])
+                if p.qz_mid_trend and trend == 1:      # กรอบ 0.5: เข้าตามเทรนด์หลักเท่านั้น
+                    for e_, t1, t2 in ((0.5 - b_, 0.5 + b_, 0.75 - b_), (0.5 + b_, 0.75 - b_, 0.75 + b_)):
+                        if px > P(e_):
+                            sides[1].levels.append([P(e_), "QZ", P(t1), P(t2), False, p.qz_all_ltf])
+                elif p.qz_mid_trend and trend == -1:
+                    for e_, t1, t2 in ((0.5 + b_, 0.5 - b_, 0.25 + b_), (0.5 - b_, 0.25 + b_, 0.25 - b_)):
+                        if px < P(e_):
+                            sides[-1].levels.append([-P(e_), "QZ", -P(t1), -P(t2), False, p.qz_all_ltf])
         if p.persist_zones:
             prune(i)
         # ---------- Silver Bullet: FVG แรกในชั่วโมงที่ชี้ไปทางเป้า ----------
@@ -743,6 +756,8 @@ def run(data: Data, p: Params):
             else:
                 if lv[2] is not None:              # Wyckoff / Quarter Zone: เป้ากำหนดมากับระดับ
                     tp1, tp2 = lv[2], lv[3]
+                    if len(lv) > 5 and lv[5]:         # เป้าตามขาของ TF เล็ก
+                        tp1, tp2 = leg_high, leg_high + p.fib_tp_ext * (leg_high - s.ext)
                     if tp2 - ent < p.min_rr * risk:
                         cnt("wy_rr")
                         continue

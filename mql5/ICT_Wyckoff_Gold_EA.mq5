@@ -90,6 +90,8 @@ input bool   InpFibTp         = false;  // TP1 = ระดับ 0 (ปลาย
 input double InpFibTpExt      = 0.27;   // ส่วนขยายของ TP2 (0.27 = ระดับ -0.27)
 input bool   InpQuarterZones  = false;  // Quarter Zone: ขอบกรอบ 0/0.25/0.5/0.75/1 ของขา TF ใหญ่เป็นจุดรอ แล้วยืนยันบน TF เล็ก
 input double InpQzBand        = 0.059;  // Quarter Zone: ขอบกรอบห่างจากเส้นกลาง (สัดส่วนของขา)
+input bool   InpQzMidTrend    = true;   // Quarter Zone: กรอบ 0.5 เข้าตามเทรนด์หลักของ TF ใหญ่เท่านั้น
+input bool   InpQzCtLtf       = true;   // Quarter Zone: ไม้สวนเทรนด์หลักใช้ TP ตามขาของ TF เล็ก (ระดับ 0 และส่วนขยาย)
 input bool   InpDrawFib       = false;  // วาด Fibonacci ของขา TF ใหญ่และ TF เล็กบนกราฟ
 input ENUM_FIB_SET InpFibSet  = FIB_SET_OTE; // ชุดระดับที่ใช้วาด
 
@@ -131,6 +133,7 @@ struct SLevel
    double            tp1;
    double            tp2;
    bool              swept;
+   bool              ltfTp;   // true = ใช้เป้าตามขาของ TF เล็กแทนเป้าที่มากับระดับ
   };
 
 struct SSide
@@ -685,6 +688,7 @@ void AddLevel(SSide &s, const double price, const int tag, const double tp1, con
    s.lv[k].tp1   = tp1;
    s.lv[k].tp2   = tp2;
    s.lv[k].swept = false;
+   s.lv[k].ltfTp = false;
   }
 
 void AddHL(double &px[], int &tg[], const double price, const int tag)
@@ -935,15 +939,38 @@ void AddQuarterZones(const int i)
    if(!hasLo || !hasHi || hi <= lo)
       return;
    double rg = hi - lo, b = InpQzBand, px = r[i - 1].close;
-   double cb[3] = {0.0, 0.25, 0.5}, cs[3] = {0.5, 0.75, 1.0};
-   for(int k = 0; k < 3; k++)
+   double retr;
+   int trend = HtfFib(i, 1, retr);                      // เทรนด์หลักของ TF ใหญ่
+   double cb[3] = {0.0, 0.25, 0.5}, cs[3] = {1.0, 0.75, 0.5};
+   int nq = InpQzMidTrend ? 2 : 3;                      // กรอบ 0.5 แยกไปทำด้านล่างเมื่อเล่นตามเทรนด์
+   for(int k = 0; k < nq; k++)
      {
-      double e = lo + (cb[k] - b) * rg;                 // ขอบล่างของกรอบ -> Buy
+      double e = lo + (cb[k] - b) * rg;                 // ขอบล่างของกรอบฝั่ง Discount -> Buy
       if(px > e)
+        {
          AddLevel(g_s[0], e, TAG_QZ, lo + (cb[k] + b) * rg, lo + (cb[k] + 0.25 - b) * rg);
-      e = lo + (cs[k] + b) * rg;                        // ขอบบนของกรอบ -> Sell
+         g_s[0].lv[ArraySize(g_s[0].lv) - 1].ltfTp = InpQzCtLtf && trend == -1;
+        }
+      e = lo + (cs[k] + b) * rg;                        // ขอบบนของกรอบฝั่ง Premium -> Sell
       if(px < e)
+        {
          AddLevel(g_s[1], -e, TAG_QZ, -(lo + (cs[k] - b) * rg), -(lo + (cs[k] - 0.25 + b) * rg));
+         g_s[1].lv[ArraySize(g_s[1].lv) - 1].ltfTp = InpQzCtLtf && trend == 1;
+        }
+     }
+   if(InpQzMidTrend && trend == 1)                      // กรอบ 0.5: Buy ตามเทรนด์ขาขึ้น ทั้งสองขอบ
+     {
+      if(px > lo + (0.5 - b) * rg)
+         AddLevel(g_s[0], lo + (0.5 - b) * rg, TAG_QZ, lo + (0.5 + b) * rg, lo + (0.75 - b) * rg);
+      if(px > lo + (0.5 + b) * rg)
+         AddLevel(g_s[0], lo + (0.5 + b) * rg, TAG_QZ, lo + (0.75 - b) * rg, lo + (0.75 + b) * rg);
+     }
+   else if(InpQzMidTrend && trend == -1)                // กรอบ 0.5: Sell ตามเทรนด์ขาลง ทั้งสองขอบ
+     {
+      if(px < lo + (0.5 + b) * rg)
+         AddLevel(g_s[1], -(lo + (0.5 + b) * rg), TAG_QZ, -(lo + (0.5 - b) * rg), -(lo + (0.25 + b) * rg));
+      if(px < lo + (0.5 - b) * rg)
+         AddLevel(g_s[1], -(lo + (0.5 - b) * rg), TAG_QZ, -(lo + (0.25 + b) * rg), -(lo + (0.25 - b) * rg));
      }
    // วาดกรอบ: ระดับ 0 ที่ swing low, ระดับ 1 ที่ swing high
    DrawFib("Q", hiT, hi, loT, lo);
@@ -1139,6 +1166,11 @@ void TrySetup(SSide &s, const int i, const int endm)
         {
          tp1 = s.lv[s.lvl].tp1;                     // กลางกรอบ
          tp2 = s.lv[s.lvl].tp2;                     // ขอบกรอบฝั่งตรงข้าม
+         if(s.lv[s.lvl].ltfTp)                      // ไม้สวนเทรนด์หลัก: เป้าตามขาของ TF เล็ก
+           {
+            tp1 = legHigh;
+            tp2 = legHigh + InpFibTpExt * (legHigh - s.ext);
+           }
          if(tp2 - ent < InpMinRR * risk)
             return;
         }
