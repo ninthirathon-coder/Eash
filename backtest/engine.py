@@ -100,6 +100,9 @@ class Params:
     ob_steps: int = 0               # ยืนยันกลับตัวบน TF เล็ก: ต้องปิดทะลุ swing high ก่อนจุดต่ำสุดกี่ขั้น (0 = ใช้แท่งปิดกลับเข้าโซน)
     ob_step_strength: int = 2       # ความแรง swing ของแต่ละขั้น (แท่งซ้าย/ขวา)
     ob_max_entry: float = 1.0       # โหมดขั้น: จุดเข้าอยู่เหนือขอบบนโซนได้ไม่เกินกี่เท่าของความสูงโซน
+    ob_retest_step: int = 0         # หลังผ่านครบทุกขั้น ตั้ง Limit รอราคาย่อกลับมาที่ขั้นนี้ (1 = ขั้นแรก, 0 = เข้า Market ทันที)
+    ob_sl_mode: str = "zone"        # "zone" = ใต้ขอบโซน H1, "low" = ใต้จุดต่ำสุดของการกลับตัว, "hl" = ใต้ higher low หลังจุดต่ำสุด
+    ob_sl_struct_buf: float = 0.2   # ระยะเผื่อของ SL แบบโครงสร้าง (เท่าของ A)
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -634,7 +637,7 @@ def run(data: Data, p: Params):
             while ob_ptr < len(ob_list) and ob_list[ob_ptr][0] <= tnow:
                 _, d_, zl, zh = ob_list[ob_ptr]
                 ob_ptr += 1
-                ob_act.append([d_, zl, zh, tnow, False, None, -1, None] if d_ == 1 else [d_, -zh, -zl, tnow, False, None, -1, None])
+                ob_act.append([d_, zl, zh, tnow, False, None, -1, None, []] if d_ == 1 else [d_, -zh, -zl, tnow, False, None, -1, None, []])
                 same = [z for z in ob_act if z[0] == d_]
                 if len(same) > p.ob_max_zones:
                     ob_act.remove(same[0])
@@ -649,13 +652,14 @@ def run(data: Data, p: Params):
                 if touched:
                     z[4] = True
                 if z[4] and (z[5] is None or Ld[i] < z[5]):
-                    z[5], z[6], z[7] = Ld[i], i, None      # จุดต่ำสุดใหม่: หาขั้นใหม่
+                    z[5], z[6], z[7], z[8] = Ld[i], i, None, []   # จุดต่ำสุดใหม่: หาขั้นใหม่
                     if p.ob_steps > 0:
                         st_, found, last = p.ob_step_strength, 0, -np.inf
                         for j in range(i - st_ - 1, max(i - 180, st_), -1):
                             if Hd[j] > last and Hd[j] > Hd[j - st_:j].max() and Hd[j] > Hd[j + 1:j + st_ + 1].max():
                                 last = Hd[j]
                                 found += 1
+                                z[8].append(last)
                                 if found == p.ob_steps:
                                     z[7] = last
                                     break
@@ -671,14 +675,24 @@ def run(data: Data, p: Params):
                     ob_act.remove(z)        # แทงลึกเกิน = โซนแตก
                     continue
                 if p.ob_steps > 0:
-                    if z[7] is None or i <= z[6] or Cd[i] <= z[7] or Cd[i] <= z[1] or Cd[i] > z[2] + p.ob_max_entry * hgt:
-                        continue            # ต้องปิดทะลุครบทุกขั้น และยังไม่ไกลจากโซนเกินไป
+                    if z[7] is None or i <= z[6] or Cd[i] <= z[7] or Cd[i] <= z[1]:
+                        continue            # ต้องปิดทะลุครบทุกขั้น
+                    if p.ob_retest_step == 0 and Cd[i] > z[2] + p.ob_max_entry * hgt:
+                        continue            # เข้า Market: ยังไม่ไกลจากโซนเกินไป
                 elif not (z[1] < Cd[i] <= z[2] + 0.25 * hgt and Cd[i] > Od[i]):
                     continue                # ต้องปิดกลับเข้าโซนด้วยแท่งตามทิศ
                 A = rng5[i - 20:i].mean()
-                ent = Cd[i] + (p.spread if d_ == 1 else 0.0)
-                sl = z[1] - p.ob_sl_buf * A
+                limit = p.ob_steps > 0 and p.ob_retest_step > 0
+                ent = z[8][p.ob_retest_step - 1] if limit else Cd[i] + (p.spread if d_ == 1 else 0.0)
+                if p.ob_sl_mode == "low" and z[5] is not None:
+                    sl = z[5] - p.ob_sl_struct_buf * A
+                elif p.ob_sl_mode == "hl" and z[6] is not None and i > z[6]:
+                    sl = Ld[z[6] + 1:i + 1].min() - p.ob_sl_struct_buf * A
+                else:
+                    sl = z[1] - p.ob_sl_buf * A
                 risk = ent - sl
+                if risk <= 0:
+                    continue
                 if risk < p.ob_min_risk * A:
                     continue
                 if p.max_spread_to_sl > 0 and p.spread / risk > p.max_spread_to_sl:
@@ -688,6 +702,12 @@ def run(data: Data, p: Params):
                 if lot < 0.01:
                     continue
                 tp = ent + p.ob_rr * risk
+                if limit:                   # ตั้ง Limit ที่ขั้นที่ทะลุ รอราคาย่อกลับมา
+                    pending = dict(d=d_, entry=ent, sl=sl, tp1=tp, tp2=tp, lot=lot, fvg_lo=sl, tag="OB",
+                                   expire=p.ob_window[1] + p.order_grace, kz="NY",
+                                   risk_usd=risk * OZ_PER_LOT * lot + p.commission * lot)
+                    ob_act.remove(z)
+                    break
                 pos = dict(d=d_, entry=ent, sl=sl, tp1=tp, tp2=tp, lot=lot, fvg_lo=-np.inf, expire=0, tag="OB",
                            kz="LON" if p.london[0] <= mod < p.london[1] else "NY" if p.nyam[0] <= mod < p.nyam[1] else "OTH",
                            risk_usd=risk * OZ_PER_LOT * lot + p.commission * lot,
