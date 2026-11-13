@@ -107,6 +107,10 @@ class Params:
     ob_hz_tfs: tuple = (240, 60)
     ob_hz_bars: int = 3
     ob_hz_min_rr: float = 2.0
+    ob_sw_min: int = 0              # ตัด setup เมื่อ TF ใน ob_sw_tfs เป็น sideway อย่างน้อยกี่ TF (0 = ปิด)
+    ob_sw_tfs: tuple = (5, 15, 30)
+    ob_sw_bars: int = 20            # จำนวนแท่งที่ใช้วัด
+    ob_sw_er: float = 0.3           # efficiency ratio ต่ำกว่านี้ = sideway
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -400,6 +404,30 @@ def run(data: Data, p: Params):
                 o=("o", "first"), h=("h", "max"), l=("l", "min"), c=("c", "last"))
             hz_sets.append((m_, g_.index.to_numpy(), g_.o.to_numpy(), g_.h.to_numpy(), g_.l.to_numpy(), g_.c.to_numpy()))
     W = np.lib.stride_tricks.sliding_window_view
+    sw_sets = []
+    if p.ob_model and p.ob_sw_min > 0:
+        for m_ in p.ob_sw_tfs:
+            k_ = T5.astype("datetime64[m]").astype("int64") // m_
+            g_ = pd.DataFrame({"k": k_, "c": C}).groupby("k").c.last()
+            c_ = g_.to_numpy()
+            n_ = p.ob_sw_bars
+            er = np.full(len(c_), np.nan)
+            if len(c_) > n_:
+                dif = np.abs(np.diff(c_))
+                den = np.convolve(dif, np.ones(n_), "valid")          # ผลรวม |Δ| ของ n_ ช่วง
+                num = np.abs(c_[n_:] - c_[:-n_])
+                er[n_:] = np.where(den > 0, num / den, 1.0)
+            sw_sets.append((m_, g_.index.to_numpy(), er))
+    tmin = T5.astype("datetime64[m]").astype("int64")
+
+    def sideway_count(i):
+        """จำนวน TF ที่ efficiency ratio ของแท่งที่ปิดแล้วต่ำกว่าเกณฑ์"""
+        n_ = 0
+        for m_, keys, er in sw_sets:
+            cut = np.searchsorted(keys, (tmin[i] + tf) // m_)
+            if cut >= 1 and er[cut - 1] == er[cut - 1] and er[cut - 1] < p.ob_sw_er:
+                n_ += 1
+        return n_
 
     def hz_target(i, d, ent, risk):
         """hidden zone: ไส้ซ้อนกัน ob_hz_bars แท่งบน TF ใหญ่ ยังไม่ถูกปิดทะลุ คืนขอบใกล้ (ราคา') หรือ None"""
@@ -714,6 +742,8 @@ def run(data: Data, p: Params):
                         continue            # เข้า Market: ยังไม่ไกลจากโซนเกินไป
                 elif not (z[1] < Cd[i] <= z[2] + 0.25 * hgt and Cd[i] > Od[i]):
                     continue                # ต้องปิดกลับเข้าโซนด้วยแท่งตามทิศ
+                if p.ob_sw_min > 0 and sideway_count(i) >= p.ob_sw_min:
+                    continue                # TF 5-30 นาทีอยู่ใน sideway = setup หลอก
                 A = rng5[i - 20:i].mean()
                 limit = p.ob_steps > 0 and p.ob_retest_step > 0
                 ent = z[8][p.ob_retest_step - 1] if limit else Cd[i] + (p.spread if d_ == 1 else 0.0)

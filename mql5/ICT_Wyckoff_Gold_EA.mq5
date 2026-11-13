@@ -57,6 +57,12 @@ input int    InpObSteps       = 2;      // ยืนยันกลับตั�
 input int    InpObStepStrength = 2;     // ยืนยันกลับตัว: ความแรง swing (แท่งซ้าย/ขวา)
 input double InpObVolMult     = 1.0;    // ยืนยันกลับตัว: tick volume แท่งที่ทะลุ > ค่าเฉลี่ย x เท่านี้ (0 = ปิด)
 input int    InpObVolBars     = 30;     // ยืนยันกลับตัว: จำนวนแท่งของค่าเฉลี่ย volume
+input int    InpObSwMin       = 3;      // ตัด setup หลอก: ถ้า TF 5-30 นาทีเป็น sideway อย่างน้อยกี่ TF (0 = ปิด, 3 = ทั้งสาม TF)
+input ENUM_TIMEFRAMES InpSwTF1 = PERIOD_M5;  // sideway: TF ที่ 1
+input ENUM_TIMEFRAMES InpSwTF2 = PERIOD_M15; // sideway: TF ที่ 2
+input ENUM_TIMEFRAMES InpSwTF3 = PERIOD_M30; // sideway: TF ที่ 3
+input int    InpSwBars        = 20;     // sideway: จำนวนแท่งที่ใช้วัด
+input double InpSwEr          = 0.3;    // sideway: efficiency ratio ต่ำกว่านี้ = sideway (ราคาไปได้สุทธิ / ระยะที่แกว่งทั้งหมด)
 input int    InpObSetupMaxH   = 12;     // ยืนยันกลับตัว: ต้องเกิดภายในกี่ชั่วโมงหลังแทงโซน
 input int    InpObRetestStep  = 1;      // จุดเข้า: Limit ที่ขั้นนี้ (1 = ขั้นแรก, 0 = Market ทันที)
 input int    InpObPendingMin  = 120;    // จุดเข้า: Limit รอได้กี่นาทีหลังหมดเวลาเทรด
@@ -1655,6 +1661,35 @@ bool HiddenTarget(const int d, const double ent, const double risk, double &tp)
    return found;
   }
 
+// Sideway: efficiency ratio ของ InpSwBars แท่งที่ปิดแล้ว = |ปิดล่าสุด - ปิดแรก| / ผลรวม |การเปลี่ยนแปลงทีละแท่ง|
+// ค่าต่ำ = ราคาแกว่งไปมาแต่ไปไม่ถึงไหน
+bool IsSideway(const ENUM_TIMEFRAMES tf)
+  {
+   double c[];
+   int n = CopyClose(_Symbol, tf, 1, InpSwBars + 1, c);
+   if(n < InpSwBars + 1)
+      return false;
+   double den = 0;
+   for(int k = 1; k < n; k++)
+      den += MathAbs(c[k] - c[k - 1]);
+   if(den <= 0)
+      return true;
+   return MathAbs(c[n - 1] - c[0]) / den < InpSwEr;
+  }
+
+int SidewayCount()
+  {
+   ENUM_TIMEFRAMES tfs[3];
+   tfs[0] = InpSwTF1;
+   tfs[1] = InpSwTF2;
+   tfs[2] = InpSwTF3;
+   int n = 0;
+   for(int t = 0; t < 3; t++)
+      if(tfs[t] != PERIOD_CURRENT && IsSideway(tfs[t]))
+         n++;
+   return n;
+  }
+
 bool PosIsOB()
   {
    ulong t = FindPosition();
@@ -1732,6 +1767,15 @@ void ObProcess(const int i, const int mod, const int endm)
         {
          g_status = "มี setup แต่อยู่นอกเวลาเทรด";
          continue;
+        }
+      if(InpObSwMin > 0)
+        {
+         int sw = SidewayCount();
+         if(sw >= InpObSwMin)
+           {
+            g_status = "ตัด setup: TF 5-30 นาทีเป็น sideway " + IntegerToString(sw) + " TF";
+            continue;
+           }
         }
       if(g_noTrade || g_waitPA || FindPending() > 0 || FindPosition() > 0)
          continue;
