@@ -103,6 +103,10 @@ class Params:
     ob_retest_step: int = 0         # หลังผ่านครบทุกขั้น ตั้ง Limit รอราคาย่อกลับมาที่ขั้นนี้ (1 = ขั้นแรก, 0 = เข้า Market ทันที)
     ob_sl_mode: str = "zone"        # "zone" = ใต้ขอบโซน H1, "low" = ใต้จุดต่ำสุดของการกลับตัว, "hl" = ใต้ higher low หลังจุดต่ำสุด
     ob_sl_struct_buf: float = 0.2   # ระยะเผื่อของ SL แบบโครงสร้าง (เท่าของ A)
+    ob_tp_hidden: bool = False      # TP ที่ hidden zone ของ TF ใหญ่ (ไส้ซ้อนกัน) ที่ใกล้สุดและให้ RR >= ob_hz_min_rr
+    ob_hz_tfs: tuple = (240, 60)
+    ob_hz_bars: int = 3
+    ob_hz_min_rr: float = 2.0
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -388,6 +392,35 @@ def run(data: Data, p: Params):
                         break
         ob_list.sort(key=lambda z: z[0])
     ob_ptr = 0
+    hz_sets = []
+    if p.ob_model and p.ob_tp_hidden:
+        for m_ in p.ob_hz_tfs:
+            k_ = T5.astype("datetime64[m]").astype("int64") // m_
+            g_ = pd.DataFrame({"k": k_, "o": O, "h": H, "l": L, "c": C}).groupby("k").agg(
+                o=("o", "first"), h=("h", "max"), l=("l", "min"), c=("c", "last"))
+            hz_sets.append((m_, g_.index.to_numpy(), g_.o.to_numpy(), g_.h.to_numpy(), g_.l.to_numpy(), g_.c.to_numpy()))
+    W = np.lib.stride_tricks.sliding_window_view
+
+    def hz_target(i, d, ent, risk):
+        """hidden zone: ไส้ซ้อนกัน ob_hz_bars แท่งบน TF ใหญ่ ยังไม่ถูกปิดทะลุ คืนขอบใกล้ (ราคา') หรือ None"""
+        best, nb = np.inf, p.ob_hz_bars
+        for m_, tk, o_, h_, l_, c_ in hz_sets:
+            cut = np.searchsorted(tk, T5[i].astype("datetime64[m]").astype("int64") // m_)
+            a = max(0, cut - 300)
+            if cut - a < nb + 2:
+                continue
+            if d == 1:
+                top, hh, cc = np.maximum(o_[a:cut], c_[a:cut]), h_[a:cut], c_[a:cut]
+            else:
+                top, hh, cc = np.maximum(-o_[a:cut], -c_[a:cut]), -l_[a:cut], -c_[a:cut]
+            zl, zh = W(top, nb).max(axis=1), W(hh, nb).min(axis=1)
+            suf = np.maximum.accumulate(cc[::-1])[::-1]
+            fut = np.append(suf[nb:], -np.inf)[:len(zl)]
+            ok = (zh > zl) & (zl > ent) & (zl - ent >= p.ob_hz_min_rr * risk) & (fut <= zh)
+            if ok.any():
+                best = min(best, zl[ok].min())
+        return None if not np.isfinite(best) else best
+
     ob_act = []                     # [ทิศ, ล่าง', บน', เวลาเกิด, แทงผ่านแล้ว, จุดต่ำสุด']
     sb_win = None
     sb_done = False
@@ -702,6 +735,12 @@ def run(data: Data, p: Params):
                 if lot < 0.01:
                     continue
                 tp = ent + p.ob_rr * risk
+                if p.ob_tp_hidden:
+                    t_ = hz_target(i, d_, ent, risk)
+                    if t_ is not None:
+                        tp = t_
+                    elif p.ob_rr <= 0:
+                        continue
                 if limit:                   # ตั้ง Limit ที่ขั้นที่ทะลุ รอราคาย่อกลับมา
                     pending = dict(d=d_, entry=ent, sl=sl, tp1=tp, tp2=tp, lot=lot, fvg_lo=sl, tag="OB",
                                    expire=p.ob_window[1] + p.order_grace, kz="NY",

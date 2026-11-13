@@ -1,6 +1,15 @@
 //+------------------------------------------------------------------+
 //|                                         ICT_Wyckoff_Gold_EA.mq5  |
-//|  ICT 2022 Mentorship Model + Wyckoff Spring/UTAD สำหรับ XAUUSD     |
+//|  XAUUSD: ระบบ Order Block H1 (ค่าเริ่มต้น) หรือโมเดล ICT เดิม         |
+//|                                                                  |
+//|  ระบบ Order Block H1 (InpStrategy = STRAT_OB)                       |
+//|   1) โซน OB บน H1 ที่ยังไม่ถูกปิดหลุด                                |
+//|   2) ราคาแทงทะลุขอบโซน แล้วบนกราฟ (แนะนำ M1) ปิดทะลุ swing high        |
+//|      ก่อนจุดต่ำสุดครบ 2 ขั้น ด้วย tick volume เหนือค่าเฉลี่ย 30 แท่ง     |
+//|   3) Limit ที่ขั้นแรก, SL ใต้ higher low, TP ที่ hidden zone H4/H1      |
+//|   4) เข้าได้ 08:00-11:00 นิวยอร์ก ถือข้ามวันได้                         |
+//|                                                                  |
+//|  โมเดลเดิม (InpStrategy = STRAT_ICT): ICT 2022 + Wyckoff Spring/UTAD  |
 //|                                                                  |
 //|  ลำดับ: กวาดสภาพคล่องใน Kill Zone -> Displacement + MSS ทิ้ง FVG   |
 //|        -> Limit ที่ FVG -> SL เลยจุดกวาด -> TP ที่สภาพคล่องฝั่งตรงข้าม |
@@ -9,8 +18,8 @@
 //|  ที่แปะ EA (แนะนำ M5 ตามเอกสาร หรือ M1/M3 ถ้าต้องการ SL สั้น)         |
 //|  ฝั่ง Sell ใช้ราคากลับเครื่องหมาย (p' = -p) จึงเขียนโค้ดฝั่ง Buy ชุดเดียว |
 //+------------------------------------------------------------------+
-#property version   "1.00"
-#property description "ICT 2022 Model + Wyckoff Spring/UTAD (XAUUSD). ไม่ใช่คำแนะนำการลงทุน"
+#property version   "1.10"
+#property description "Order Block H1 + ยืนยัน 2 ขั้น (ค่าเริ่มต้น) / ICT 2022 Model + Wyckoff (XAUUSD). ไม่ใช่คำแนะนำการลงทุน"
 
 #include <Trade/Trade.mqh>
 
@@ -19,6 +28,51 @@ enum ENUM_FIB_SET
    FIB_SET_OTE     = 0, // ชุด OTE: 0, 0.21, 0.295, 0.38, 0.5, 0.62, 0.705, 0.79, 1, -0.27, 1.27
    FIB_SET_QUARTER = 1  // ชุด Quarter: 0, 0.25, 0.5, 0.75, 1 พร้อมขอบ Buy/Sell ห่าง 0.059
   };
+
+enum ENUM_STRATEGY
+  {
+   STRAT_OB  = 0, // Order Block H1 + ยืนยัน 2 ขั้น + hidden zone
+   STRAT_ICT = 1  // โมเดลเดิม: ICT 2022 / Wyckoff / Quarter Zone / Silver Bullet
+  };
+
+enum ENUM_OB_SL
+  {
+   OB_SL_HL   = 0, // ใต้ higher low หลังจุดต่ำสุด
+   OB_SL_LOW  = 1, // ใต้จุดต่ำสุดของการกลับตัว
+   OB_SL_ZONE = 2  // ใต้ขอบโซน H1
+  };
+
+input group "=== ระบบ ==="
+input ENUM_STRATEGY InpStrategy = STRAT_OB; // ระบบที่ใช้เทรด
+
+input group "=== Order Block H1 (ใช้เมื่อเลือกระบบ Order Block) ==="
+input int    InpObStart       = 800;    // เวลาเข้าได้ เริ่ม (นิวยอร์ก HHMM)
+input int    InpObEnd         = 1100;   // เวลาเข้าได้ จบ (นิวยอร์ก HHMM)
+input int    InpObBreakBars   = 3;      // โซน: ต้องปิดทะลุแท่ง OB ภายในกี่แท่ง H1
+input double InpObDisp        = 1.5;    // โซน: ตัวแท่งของขาที่ทะลุ >= กี่เท่าของค่าเฉลี่ย 20 แท่ง H1
+input int    InpObMaxAgeH     = 120;    // โซน: อายุสูงสุด (ชั่วโมง)
+input int    InpObMaxZones    = 6;      // โซน: จำนวนสูงสุดต่อฝั่ง
+input int    InpObLookbackH   = 200;    // โซน: ย้อนหาจากแท่ง H1 กี่แท่ง
+input int    InpObSteps       = 2;      // ยืนยันกลับตัว: ต้องปิดทะลุ swing high กี่ขั้น
+input int    InpObStepStrength = 2;     // ยืนยันกลับตัว: ความแรง swing (แท่งซ้าย/ขวา)
+input double InpObVolMult     = 1.0;    // ยืนยันกลับตัว: tick volume แท่งที่ทะลุ > ค่าเฉลี่ย x เท่านี้ (0 = ปิด)
+input int    InpObVolBars     = 30;     // ยืนยันกลับตัว: จำนวนแท่งของค่าเฉลี่ย volume
+input int    InpObSetupMaxH   = 12;     // ยืนยันกลับตัว: ต้องเกิดภายในกี่ชั่วโมงหลังแทงโซน
+input int    InpObRetestStep  = 1;      // จุดเข้า: Limit ที่ขั้นนี้ (1 = ขั้นแรก, 0 = Market ทันที)
+input int    InpObPendingMin  = 120;    // จุดเข้า: Limit รอได้กี่นาทีหลังหมดเวลาเทรด
+input ENUM_OB_SL InpObSlMode  = OB_SL_HL; // SL
+input double InpObSlBuf       = 0.2;    // SL: ระยะเผื่อ (x ช่วงแท่งเฉลี่ย 20 แท่ง)
+input double InpObMinRiskA    = 2.0;    // SL: ระยะขั้นต่ำ (x ช่วงแท่งเฉลี่ย 20 แท่ง)
+input bool   InpObTpHidden    = true;   // TP: ที่ hidden zone ของ TF ใหญ่
+input ENUM_TIMEFRAMES InpHzTF1 = PERIOD_H4; // TP: TF ใหญ่ที่หา hidden zone ตัวที่ 1
+input ENUM_TIMEFRAMES InpHzTF2 = PERIOD_H1; // TP: TF ใหญ่ที่หา hidden zone ตัวที่ 2
+input int    InpHzBars        = 3;      // TP: hidden zone = ไส้ซ้อนกันอย่างน้อยกี่แท่ง
+input int    InpHzLookback    = 300;    // TP: ย้อนหา hidden zone กี่แท่ง
+input double InpObMinRR       = 2.0;    // TP: RR ขั้นต่ำถึง hidden zone
+input double InpObRR          = 3.0;    // TP: ถ้าไม่มี hidden zone ใช้ RR คงที่ (0 = ไม่เข้า)
+input bool   InpObHoldOvernight = true; // ถือข้ามวัน (ไม่ปิดตาม InpEodExit)
+input int    InpObMaxTradesDay = 5;     // จำนวนไม้สูงสุดต่อวัน
+input int    InpObMaxLossesDay = 3;     // แพ้ครบกี่ไม้แล้วหยุดวันนั้น
 
 input group "=== เวลา (ใส่เป็นเวลานิวยอร์ก HHMM) ==="
 input int    InpServerMinusNY = 7;      // เวลาเซิร์ฟเวอร์โบรกเกอร์ ลบ เวลานิวยอร์ก (ชม.) โบรก GMT+2/+3 = 7
@@ -128,6 +182,34 @@ input long   InpMagic         = 20261111;
 #define TAG_WYCK  5
 #define TAG_SB    6
 #define TAG_QZ    7
+#define TAG_OB    8
+
+struct SObZone
+  {
+   int               d;
+   double            lo;      // ราคา'
+   double            hi;      // ราคา'
+   datetime          from;    // เวลาที่เริ่มใช้ได้
+   datetime          t;       // เวลาแท่ง OB
+  };
+
+struct SObSetup
+  {
+   int               d;
+   bool              active;
+   double            zlo, zhi;
+   datetime          zt;
+   double            ext;     // จุดต่ำสุด'
+   datetime          extT;
+   double            st[8];   // ระดับของแต่ละขั้น'
+   int               nst;
+  };
+
+SObZone  g_ob[];
+SObSetup g_os[2];
+double   g_obUsed[];
+datetime g_lastObH1 = 0;
+bool     g_noTrade  = false;
 
 struct SLevel
   {
@@ -211,7 +293,12 @@ int WindowMin(const int fromHHMM, const int toHHMM) { return (NyMod(toHHMM) - Ny
 int OnInit()
   {
    // กันค่าเวลาผิดรูปแบบ: ต้องเป็น HHMM เช่น 200 = 02:00 (ถ้าใส่ 2 จะกลายเป็น 00:02)
-   if((InpTradeLondon && WindowMin(InpLondonStart, InpLondonEnd) < 30) || (InpTradeNY && WindowMin(InpNYStart, InpNYEnd) < 30))
+   if(InpStrategy == STRAT_OB && WindowMin(InpObStart, InpObEnd) < 30)
+     {
+      Alert("ICT_Wyckoff_Gold_EA: เวลาเทรดต้องใส่แบบ HHMM เช่น 800-1100 (ค่าปัจจุบัน ", InpObStart, "-", InpObEnd, ")");
+      return INIT_PARAMETERS_INCORRECT;
+     }
+   if(InpStrategy == STRAT_ICT && ((InpTradeLondon && WindowMin(InpLondonStart, InpLondonEnd) < 30) || (InpTradeNY && WindowMin(InpNYStart, InpNYEnd) < 30)))
      {
       Alert("ICT_Wyckoff_Gold_EA: เวลา Kill Zone ต้องใส่แบบ HHMM เช่น London 200-500, New York 700-1000 (ค่าปัจจุบัน ",
             InpLondonStart, "-", InpLondonEnd, " / ", InpNYStart, "-", InpNYEnd, ") กด Reset ในแท็บ Inputs");
@@ -226,6 +313,10 @@ int OnInit()
    g_s[1].d = -1;
    ResetSide(g_s[0]);
    ResetSide(g_s[1]);
+   g_os[0].d = 1;
+   g_os[1].d = -1;
+   g_os[0].active = false;
+   g_os[1].active = false;
    return INIT_SUCCEEDED;
   }
 
@@ -330,7 +421,9 @@ bool DayLimitHit()
    int trades, losses;
    double dayPl;
    DayCounters(trades, losses, dayPl);
-   if(trades >= InpMaxTradesDay || losses >= InpMaxLossesDay)
+   int maxT = InpStrategy == STRAT_OB ? InpObMaxTradesDay : InpMaxTradesDay;
+   int maxL = InpStrategy == STRAT_OB ? InpObMaxLossesDay : InpMaxLossesDay;
+   if(trades >= maxT || losses >= maxL)
       return true;
    if(InpMaxDailyLossPct > 0)
      {
@@ -594,6 +687,11 @@ void Panel()
   {
    if(!InpShowPanel)
       return;
+   if(InpStrategy == STRAT_OB)
+     {
+      Comment(ObPanelText() + (g_status != "" ? "สถานะ: " + g_status : ""));
+      return;
+     }
    string txt = "ICT + Wyckoff Gold EA\n";
    txt += "Bias: " + (g_bias == 1 ? "Buy" : g_bias == -1 ? "Sell" : "-") + (g_dayOk ? "" : "  (วันนี้งดเทรด)") + "\n";
    txt += "Kill Zone: " + (g_kz == 1 ? "London" : g_kz == 2 ? "New York" : "-") + "\n";
@@ -1410,6 +1508,310 @@ void SilverBullet(const int i, const int mod, const int endm)
   }
 
 //+------------------------------------------------------------------+
+//| ระบบ Order Block H1                                                |
+//| 1) โซน: แท่งสวนทางแท่งสุดท้ายบน H1 ก่อนขาที่ปิดทะลุมันด้วยแรง         |
+//| 2) ราคาแทงทะลุขอบโซน แล้วบน TF ของกราฟต้องปิดทะลุ swing high          |
+//|    ก่อนจุดต่ำสุดครบ InpObSteps ขั้น ด้วย tick volume เหนือค่าเฉลี่ย     |
+//| 3) ตั้ง Limit รอราคาย่อกลับมาที่ขั้นที่ทะลุ, SL ใต้ swing low           |
+//| 4) TP ที่ hidden zone ของ TF ใหญ่ (ไส้ซ้อนกันหลายแท่ง) ที่ให้ RR ถึง     |
+//| ฝั่ง Sell ใช้ราคากลับเครื่องหมายเหมือนส่วนอื่นของ EA                    |
+//+------------------------------------------------------------------+
+bool InWindow(const int m, const int a, const int b) { return a <= b ? (m >= a && m <= b) : (m >= a || m <= b); }
+
+bool ObUsed(const double lo)
+  {
+   for(int k = 0; k < ArraySize(g_obUsed); k++)
+      if(MathAbs(g_obUsed[k] - lo) < _Point * 0.5)
+         return true;
+   return false;
+  }
+
+// สร้างรายการโซน Order Block จากแท่ง H1 ที่ปิดแล้ว (เรียกทุกครั้งที่ขึ้นแท่ง H1 ใหม่)
+void ObBuildZones()
+  {
+   ArrayResize(g_ob, 0);
+   MqlRates h[];
+   int n = CopyRates(_Symbol, PERIOD_H1, 1, InpObLookbackH + 30, h);
+   if(n < 40)
+      return;
+   ArraySetAsSeries(h, false);
+   for(int si = 0; si < 2; si++)
+     {
+      int d = si == 0 ? 1 : -1;
+      int first = ArraySize(g_ob);
+      for(int k = 20; k < n - 1; k++)
+        {
+         if(Cd(d, h[k]) - Od(d, h[k]) >= 0)
+            continue;                            // ต้องเป็นแท่งสวนทาง
+         double avg = 0;
+         for(int q = k - 20; q < k; q++)
+            avg += MathAbs(h[q].close - h[q].open);
+         avg /= 20;
+         for(int m = k + 1; m <= MathMin(k + InpObBreakBars, n - 1); m++)
+           {
+            if(Cd(d, h[m]) <= Hd(d, h[k]))
+               continue;
+            double mx = -DBL_MAX;                // แรงของขาที่ปิดทะลุ
+            for(int q = k + 1; q <= m; q++)
+               mx = MathMax(mx, Cd(d, h[q]) - Od(d, h[q]));
+            if(mx >= InpObDisp * avg)
+              {
+               double lo = Ld(d, h[k]), hi = Hd(d, h[k]);
+               bool alive = true;                // แท่ง H1 ปิดหลุดโซนแล้ว = โซนใช้ไม่ได้
+               for(int q = m + 1; q < n && alive; q++)
+                  if(Cd(d, h[q]) < lo)
+                     alive = false;
+               datetime from = h[m].time + 3600;
+               if(alive && h[n - 1].time + 3600 - from <= (long)InpObMaxAgeH * 3600 && !ObUsed(lo))
+                 {
+                  int z = ArraySize(g_ob);
+                  ArrayResize(g_ob, z + 1);
+                  g_ob[z].d = d;
+                  g_ob[z].lo = lo;
+                  g_ob[z].hi = hi;
+                  g_ob[z].from = from;
+                  g_ob[z].t = h[k].time;
+                 }
+              }
+            break;
+           }
+        }
+      while(ArraySize(g_ob) - first > InpObMaxZones)   // เก็บเฉพาะโซนล่าสุด
+         ArrayRemove(g_ob, first, 1);
+     }
+  }
+
+// ขั้นของการกลับตัว: swing high ก่อนจุดต่ำสุด เรียงจากใกล้ไปไกล แต่ละขั้นสูงกว่าขั้นก่อน
+void ObSteps(const int si, const int e)
+  {
+   int d = g_os[si].d, st = InpObStepStrength;
+   g_os[si].nst = 0;
+   double last = -DBL_MAX;
+   for(int j = e - st - 1; j > MathMax(e - 180, st) && g_os[si].nst < MathMin(InpObSteps, 8); j--)
+     {
+      double v = Hd(d, r[j]);
+      if(v <= last)
+         continue;
+      bool sw = true;
+      for(int q = 1; q <= st && sw; q++)
+         if(!(v > Hd(d, r[j - q]) && v > Hd(d, r[j + q])))
+            sw = false;
+      if(sw)
+        {
+         last = v;
+         g_os[si].st[g_os[si].nst] = v;
+         g_os[si].nst++;
+        }
+     }
+  }
+
+int BarIdx(const datetime t, const int i)
+  {
+   for(int k = i; k >= 0; k--)
+      if(r[k].time <= t)
+         return k;
+   return 0;
+  }
+
+// Hidden zone: แท่งบน TF ใหญ่ทิ้งไส้ซ้อนกันอย่างน้อย InpHzBars แท่ง และยังไม่ถูกปิดทะลุ
+// คืน TP' = ขอบใกล้ของโซนที่อยู่ใกล้ที่สุดและให้ RR ถึง InpObMinRR
+bool HiddenTarget(const int d, const double ent, const double risk, double &tp)
+  {
+   ENUM_TIMEFRAMES tfs[2];
+   tfs[0] = InpHzTF1;
+   tfs[1] = InpHzTF2;
+   bool found = false;
+   double best = DBL_MAX;
+   for(int t = 0; t < 2; t++)
+     {
+      if(tfs[t] == PERIOD_CURRENT || (t == 1 && tfs[1] == tfs[0]))
+         continue;
+      MqlRates h[];
+      int n = CopyRates(_Symbol, tfs[t], 1, InpHzLookback, h);
+      if(n < InpHzBars + 2)
+         continue;
+      ArraySetAsSeries(h, false);
+      for(int k = 0; k + InpHzBars <= n; k++)
+        {
+         double zl = -DBL_MAX, zh = DBL_MAX;
+         for(int q = k; q < k + InpHzBars; q++)
+           {
+            zl = MathMax(zl, MathMax(Od(d, h[q]), Cd(d, h[q])));   // ตัวแท่ง
+            zh = MathMin(zh, Hd(d, h[q]));                         // ปลายไส้
+           }
+         if(zh <= zl || zl <= ent || zl - ent < InpObMinRR * risk || zl >= best)
+            continue;
+         bool broken = false;
+         for(int q = k + InpHzBars; q < n && !broken; q++)
+            if(Cd(d, h[q]) > zh)
+               broken = true;
+         if(broken)
+            continue;
+         best = zl;
+         found = true;
+        }
+     }
+   tp = best;
+   return found;
+  }
+
+bool PosIsOB()
+  {
+   ulong t = FindPosition();
+   return t > 0 && PositionSelectByTicket(t) && StringFind(PositionGetString(POSITION_COMMENT), "ICTWY " + IntegerToString(TAG_OB)) == 0;
+  }
+
+void ObProcess(const int i, const int mod, const int endm)
+  {
+   datetime h1 = iTime(_Symbol, PERIOD_H1, 0);
+   if(h1 != g_lastObH1)
+     {
+      g_lastObH1 = h1;
+      ObBuildZones();
+     }
+   if(i < 40)
+      return;
+   double A = 0;
+   for(int k = i - 20; k < i; k++)
+      A += r[k].high - r[k].low;
+   A /= 20;
+   bool inWin = InWindow(endm, NyMod(InpObStart), NyMod(InpObEnd));
+   for(int si = 0; si < 2; si++)
+     {
+      int d = g_os[si].d;
+      if(g_os[si].active)
+        {
+         bool alive = false;
+         for(int k = 0; k < ArraySize(g_ob) && !alive; k++)
+            if(g_ob[k].d == d && MathAbs(g_ob[k].lo - g_os[si].zlo) < _Point * 0.5)
+               alive = true;
+         if(!alive || r[i].time - g_os[si].extT > (long)InpObSetupMaxH * 3600)
+            g_os[si].active = false;
+        }
+      if(!g_os[si].active)
+        {
+         int best = -1;                          // โซนที่ถูกแทงทะลุในแท่งนี้
+         for(int k = 0; k < ArraySize(g_ob); k++)
+            if(g_ob[k].d == d && g_ob[k].from <= r[i].time && Ld(d, r[i]) < g_ob[k].lo &&
+               (best < 0 || g_ob[k].lo > g_ob[best].lo))
+               best = k;
+         if(best < 0)
+            continue;
+         g_os[si].active = true;
+         g_os[si].zlo = g_ob[best].lo;
+         g_os[si].zhi = g_ob[best].hi;
+         g_os[si].zt  = g_ob[best].t;
+         g_os[si].ext = Ld(d, r[i]);
+         g_os[si].extT = r[i].time;
+         ObSteps(si, i);
+         continue;
+        }
+      if(Ld(d, r[i]) < g_os[si].ext)             // ทำจุดต่ำใหม่: นับขั้นใหม่
+        {
+         g_os[si].ext = Ld(d, r[i]);
+         g_os[si].extT = r[i].time;
+         ObSteps(si, i);
+         continue;
+        }
+      int ns = g_os[si].nst;
+      if(ns < MathMin(InpObSteps, 8) || ns == 0 || Cd(d, r[i]) <= g_os[si].st[ns - 1] || Cd(d, r[i]) <= g_os[si].zlo)
+         continue;                               // ยังปิดทะลุไม่ครบทุกขั้น
+      if(InpObVolMult > 0 && i > InpObVolBars)
+        {
+         double av = 0;
+         for(int k = i - InpObVolBars; k < i; k++)
+            av += (double)r[k].tick_volume;
+         av /= InpObVolBars;
+         if(av > 0 && (double)r[i].tick_volume <= InpObVolMult * av)
+           {
+            g_status = "ทะลุครบ " + IntegerToString(ns) + " ขั้นแล้ว แต่ volume ต่ำกว่าค่าเฉลี่ย";
+            continue;
+           }
+        }
+      if(!inWin)
+        {
+         g_status = "มี setup แต่อยู่นอกเวลาเทรด";
+         continue;
+        }
+      if(g_noTrade || g_waitPA || FindPending() > 0 || FindPosition() > 0)
+         continue;
+      if(DayLimitHit())
+        {
+         g_status = "ครบไม้ / ถึงเพดานขาดทุนของวัน";
+         continue;
+        }
+      double ent;
+      if(InpObRetestStep > 0)
+         ent = g_os[si].st[MathMin(InpObRetestStep, ns) - 1];   // รอย่อกลับมาที่ขั้นที่ทะลุ
+      else
+         ent = d * (d == 1 ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) : SymbolInfoDouble(_Symbol, SYMBOL_BID));
+      int e = BarIdx(g_os[si].extT, i);
+      double sl;
+      if(InpObSlMode == OB_SL_LOW)
+         sl = g_os[si].ext - InpObSlBuf * A;
+      else if(InpObSlMode == OB_SL_HL && e < i)
+        {
+         double hl = DBL_MAX;                    // higher low หลังจุดต่ำสุด
+         for(int k = e + 1; k <= i; k++)
+            hl = MathMin(hl, Ld(d, r[k]));
+         sl = hl - InpObSlBuf * A;
+        }
+      else
+         sl = g_os[si].zlo - InpObSlBuf * A;
+      double risk = ent - sl;
+      if(risk <= 0 || risk < InpObMinRiskA * A)
+         continue;
+      double tp = 0;
+      if(!(InpObTpHidden && HiddenTarget(d, ent, risk, tp)))
+        {
+         if(InpObRR <= 0)
+           {
+            g_status = "ไม่มี hidden zone ที่ให้ RR ถึง";
+            continue;
+           }
+         tp = ent + InpObRR * risk;
+        }
+      if(PlaceOrder(d, ent, sl, tp, tp, sl, NyMod(InpObEnd) + InpObPendingMin, tp, TAG_OB))
+        {
+         int u = ArraySize(g_obUsed);
+         ArrayResize(g_obUsed, u + 1);
+         g_obUsed[u] = g_os[si].zlo;
+         DrawFVG(d, g_os[si].zt, d * g_os[si].zhi, d * g_os[si].zlo);
+         DrawSweep(r[i].time, d * tp);
+         g_os[si].active = false;
+         ObBuildZones();
+        }
+     }
+  }
+
+string ObPanelText()
+  {
+   int nb = 0, ns = 0;
+   for(int k = 0; k < ArraySize(g_ob); k++)
+      if(g_ob[k].d == 1)
+         nb++;
+      else
+         ns++;
+   string txt = "ICT Gold EA: Order Block H1\n";
+   txt += "โซน OB ที่รอ: Buy " + IntegerToString(nb) + " | Sell " + IntegerToString(ns) + "\n";
+   txt += "เวลาเทรด: " + (InWindow(g_curMod + PeriodSeconds(_Period) / 60, NyMod(InpObStart), NyMod(InpObEnd)) ? "ใช่" : "ไม่ใช่") + "\n";
+   for(int si = 0; si < 2; si++)
+     {
+      txt += si == 0 ? "Buy : " : "Sell: ";
+      if(g_os[si].active)
+        {
+         txt += "แทงโซน " + DoubleToString(MathAbs(g_os[si].zlo), _Digits) + " | ขั้น ";
+         for(int k = 0; k < g_os[si].nst; k++)
+            txt += DoubleToString(MathAbs(g_os[si].st[k]), _Digits) + " ";
+        }
+      else
+         txt += "-";
+      txt += "\n";
+     }
+   return txt;
+  }
+
+//+------------------------------------------------------------------+
 //| ทุก tick: ยกเลิกออเดอร์ถ้าราคาถึง TP1 ก่อนเข้า, แบ่งปิดที่ TP1          |
 //+------------------------------------------------------------------+
 void ManageOnTick()
@@ -1479,21 +1881,22 @@ void OnNewBar()
       ResetSide(g_s[1]);
       DeletePending();
       g_waitPA = false;
-      g_dayOk = ComputeBias() && !IsNoTradeDate(day);
+      g_noTrade = IsNoTradeDate(day);
+      g_dayOk = ComputeBias() && !g_noTrade;
      }
 
    // ---------- จัดการตอนแท่งปิด ----------
    int newsA = NyMod(InpNewsStart), newsB = NyMod(InpNewsEnd);
    if(FindPosition() > 0)
      {
-      if(InpEodExit >= 0 && endm >= NyMod(InpEodExit))
+      if(InpEodExit >= 0 && endm >= NyMod(InpEodExit) && !(InpObHoldOvernight && PosIsOB()))
          ClosePosition();
       else if(g_dir != 0 && InpExitOnFvgFail && !g_be && Cd(g_dir, r[i]) < g_fvgLo)
          ClosePosition();                        // แท่งปิดสวนทะลุ FVG ที่ใช้เข้า
      }
    else if(FindPending() > 0)
      {
-      if(g_dir == 0 || Cd(g_dir, r[i]) < g_fvgLo || endm >= g_expire || (endm >= newsA && endm < newsB))
+      if(g_dir == 0 || Cd(g_dir, r[i]) < g_fvgLo || endm >= g_expire || (InpStrategy == STRAT_ICT && endm >= newsA && endm < newsB))
          DeletePending();
      }
    if(g_waitPA)                                  // ---------- รอแท่งปฏิเสธใน FVG ----------
@@ -1514,6 +1917,12 @@ void OnNewBar()
         }
       if(!g_waitPA && FindPosition() == 0 && FindPending() == 0)
          g_dir = 0;
+     }
+   if(InpStrategy == STRAT_OB)
+     {
+      ObProcess(i, mod, endm);
+      Panel();
+      return;
      }
    if(!g_dayOk)
      {
