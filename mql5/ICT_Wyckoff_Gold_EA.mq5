@@ -57,11 +57,11 @@ input int    InpObSteps       = 2;      // ยืนยันกลับตั�
 input int    InpObStepStrength = 2;     // ยืนยันกลับตัว: ความแรง swing (แท่งซ้าย/ขวา)
 input double InpObVolMult     = 1.0;    // ยืนยันกลับตัว: tick volume แท่งที่ทะลุ > ค่าเฉลี่ย x เท่านี้ (0 = ปิด)
 input int    InpObVolBars     = 30;     // ยืนยันกลับตัว: จำนวนแท่งของค่าเฉลี่ย volume
-input int    InpObSwMin       = 3;      // ตัด setup หลอก: ถ้า TF 5-30 นาทีเป็น sideway อย่างน้อยกี่ TF (0 = ปิด, 3 = ทั้งสาม TF)
-input ENUM_TIMEFRAMES InpSwTF1 = PERIOD_M5;  // sideway: TF ที่ 1
-input ENUM_TIMEFRAMES InpSwTF2 = PERIOD_M15; // sideway: TF ที่ 2
-input ENUM_TIMEFRAMES InpSwTF3 = PERIOD_M30; // sideway: TF ที่ 3
-input ENUM_TIMEFRAMES InpSwTF4 = PERIOD_CURRENT; // sideway: TF ที่ 4 (current = ไม่ใช้, เลือก M1 เพื่อดู M1 ด้วย)
+input int    InpObSwMin       = 3;      // ตัด setup หลอก: ถ้า TF เล็กเป็น sideway อย่างน้อยกี่ TF (0 = ปิด)
+input ENUM_TIMEFRAMES InpSwTF1 = PERIOD_M1;  // sideway: TF ที่ 1
+input ENUM_TIMEFRAMES InpSwTF2 = PERIOD_M3;  // sideway: TF ที่ 2
+input ENUM_TIMEFRAMES InpSwTF3 = PERIOD_M15; // sideway: TF ที่ 3
+input ENUM_TIMEFRAMES InpSwTF4 = PERIOD_M30; // sideway: TF ที่ 4 (current = ไม่ใช้)
 input int    InpSwBars        = 20;     // sideway: จำนวนแท่งที่ใช้วัด
 input double InpSwEr          = 0.3;    // sideway: efficiency ratio ต่ำกว่านี้ = sideway (ราคาไปได้สุทธิ / ระยะที่แกว่งทั้งหมด)
 input int    InpObSetupMaxH   = 12;     // ยืนยันกลับตัว: ต้องเกิดภายในกี่ชั่วโมงหลังแทงโซน
@@ -1775,7 +1775,7 @@ void ObProcess(const int i, const int mod, const int endm)
          int sw = SidewayCount();
          if(sw >= InpObSwMin)
            {
-            g_status = "ตัด setup: TF 5-30 นาทีเป็น sideway " + IntegerToString(sw) + " TF";
+            g_status = "ตัด setup: TF เล็กเป็น sideway " + IntegerToString(sw) + " TF";
             continue;
            }
         }
