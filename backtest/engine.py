@@ -85,6 +85,18 @@ class Params:
     qz_all_ltf: bool = False        # ทุกไม้ใช้ TP ตามขาของ TF เล็ก
     qz_conf_tfs: tuple = ()         # TF อื่นที่ดูควบกัน (นาที) เช่น (240, 15): ขอบของ TF หลักต้องอยู่ในกรอบของ TF เหล่านี้ด้วย
     qz_min_conf: int = 1            # ต้องตรงกับ TF อื่นอย่างน้อยกี่ TF
+    # --- Order Block H1: ราคาแทงผ่านโซนแล้วถูกดึงกลับเข้าโซน -> เข้า Market ---
+    ob_model: bool = False
+    ob_window: tuple = (900, 1080)  # ช่วงเวลาที่เข้าได้ (นาทีนับจาก 17:00 NY) ค่าเริ่มต้น 08:00-11:00 NY
+    ob_disp: float = 1.5            # แท่งที่ออกจาก OB: ตัวแท่ง >= กี่เท่าของค่าเฉลี่ย 20 แท่ง H1
+    ob_break_bars: int = 3          # ต้องปิดทะลุ OB ภายในกี่แท่ง H1
+    ob_max_age: int = 120           # อายุโซน (ชั่วโมง)
+    ob_max_zones: int = 6           # จำนวนโซนต่อฝั่ง
+    ob_sl_buf: float = 0.5          # SL พ้นขอบโซน (เท่าของ A)
+    ob_min_risk: float = 2.0        # ระยะ SL ขั้นต่ำ (เท่าของ A)
+    ob_rr: float = 3.0              # TP = RR คงที่ (เท่าของความเสี่ยง)
+    ob_need_sweep: bool = True      # ต้องแทงทะลุขอบโซนก่อน (false = แค่แตะโซนแล้วมีแท่งกลับตัว)
+    ob_max_depth: float = 0.0       # แทงเลยโซนได้ไม่เกินกี่เท่าของความสูงโซน (0 = ไม่จำกัด)
     # --- ตัวเลือกจาก ICT_TopDown ---
     persist_zones: bool = False     # เก็บโซนข้ามวันจนกว่าจะถูกแตะ
     zone_cap: int = 64
@@ -220,6 +232,7 @@ def run(data: Data, p: Params):
     hkey = T5.astype("datetime64[h]")
     dfh = pd.DataFrame({"h": hkey, "high": H, "low": L, "close": C})
     h1 = dfh.groupby("h").agg(high=("high", "max"), low=("low", "min"), close=("close", "last"))
+    h1o = pd.DataFrame({"h": hkey, "open": O}).groupby("h").open.first().to_numpy()
     h1t = h1.index.to_numpy()
     h1h, h1l, h1c = h1.high.to_numpy(), h1.low.to_numpy(), h1.close.to_numpy()
     hk = T5.astype("datetime64[m]").astype("int64") // p.htf_tf
@@ -352,6 +365,24 @@ def run(data: Data, p: Params):
         for k in [k for k in zs_lo if La[i] < k]:
             del zs_lo[k]
 
+    # ---- Order Block บน H1: แท่งสีตรงข้ามแท่งสุดท้ายก่อนขาที่ปิดทะลุมันด้วย displacement ----
+    ob_list = []                    # (เวลาที่เริ่มใช้ได้, ทิศ, ล่าง, บน)
+    if p.ob_model:
+        hb = np.abs(h1c - h1o)
+        for k in range(20, len(h1c) - 1):
+            for d_ in (1, -1):
+                if d_ * (h1c[k] - h1o[k]) >= 0:
+                    continue        # ต้องเป็นแท่งสวนทาง
+                avg = hb[k - 20:k].mean()
+                for m_ in range(k + 1, min(k + 1 + p.ob_break_bars, len(h1c))):
+                    broke = h1c[m_] > h1h[k] if d_ == 1 else h1c[m_] < h1l[k]
+                    if broke:
+                        if (d_ * (h1c[k + 1:m_ + 1] - h1o[k + 1:m_ + 1])).max() >= p.ob_disp * avg:
+                            ob_list.append((h1t[m_] + np.timedelta64(1, "h"), d_, h1l[k], h1h[k]))
+                        break
+        ob_list.sort(key=lambda z: z[0])
+    ob_ptr = 0
+    ob_act = []                     # [ทิศ, ล่าง', บน', เวลาเกิด, แทงผ่านแล้ว, จุดต่ำสุด']
     sb_win = None
     sb_done = False
     sb_tg = {}
@@ -594,6 +625,60 @@ def run(data: Data, p: Params):
                                             if lv[1] != "QZ" or qz_conf(i, d_ * lv[0], d_) >= p.qz_min_conf]
         if p.persist_zones:
             prune(i)
+        # ---------- Order Block H1: แทงผ่านโซน -> ดึงกลับเข้าโซน -> เข้า Market ----------
+        if p.ob_model:
+            tnow = T5[i]
+            while ob_ptr < len(ob_list) and ob_list[ob_ptr][0] <= tnow:
+                _, d_, zl, zh = ob_list[ob_ptr]
+                ob_ptr += 1
+                ob_act.append([d_, zl, zh, tnow, False, None] if d_ == 1 else [d_, -zh, -zl, tnow, False, None])
+                same = [z for z in ob_act if z[0] == d_]
+                if len(same) > p.ob_max_zones:
+                    ob_act.remove(same[0])
+            hour_end = (mod + tf) % 60 == 0
+            for z in list(ob_act):
+                d_ = z[0]
+                Hd, Ld, Cd, Od = X[d_]
+                if (tnow - z[3]) / np.timedelta64(1, "h") > p.ob_max_age or (hour_end and Cd[i] < z[1]):
+                    ob_act.remove(z)        # หมดอายุ หรือแท่ง H1 ปิดหลุดโซน
+                    continue
+                touched = Ld[i] < z[1] if p.ob_need_sweep else Ld[i] <= z[2]
+                if touched:
+                    z[4] = True
+                    z[5] = Ld[i] if z[5] is None else min(z[5], Ld[i])
+                if not z[4] or pos is not None or pending is not None or i < 22:
+                    continue
+                if not (p.ob_window[0] <= endm <= p.ob_window[1]):
+                    continue
+                if day_trades >= p.max_trades_day or day_losses >= p.max_losses_day or \
+                        (p.max_daily_loss_pct > 0 and day_pnl <= -p.max_daily_loss_pct / 100 * day_eq0):
+                    continue
+                hgt = z[2] - z[1]
+                if p.ob_max_depth > 0 and z[1] - z[5] > p.ob_max_depth * hgt:
+                    ob_act.remove(z)        # แทงลึกเกิน = โซนแตก
+                    continue
+                if not (z[1] < Cd[i] <= z[2] + 0.25 * hgt and Cd[i] > Od[i]):
+                    continue                # ต้องปิดกลับเข้าโซนด้วยแท่งตามทิศ
+                A = rng5[i - 20:i].mean()
+                ent = Cd[i] + (p.spread if d_ == 1 else 0.0)
+                sl = z[1] - p.ob_sl_buf * A
+                risk = ent - sl
+                if risk < p.ob_min_risk * A:
+                    continue
+                if p.max_spread_to_sl > 0 and p.spread / risk > p.max_spread_to_sl:
+                    continue
+                rp = p.risk_pct_london if (p.london[0] <= mod < p.london[1] and p.risk_pct_london > 0) else p.risk_pct
+                lot = np.floor(equity * rp / 100 / (risk * OZ_PER_LOT) * 100 + 1e-9) / 100
+                if lot < 0.01:
+                    continue
+                tp = ent + p.ob_rr * risk
+                pos = dict(d=d_, entry=ent, sl=sl, tp1=tp, tp2=tp, lot=lot, fvg_lo=-np.inf, expire=0, tag="OB",
+                           kz="LON" if p.london[0] <= mod < p.london[1] else "NY" if p.nyam[0] <= mod < p.nyam[1] else "OTH",
+                           risk_usd=risk * OZ_PER_LOT * lot + p.commission * lot,
+                           t_open=T5[i], pnl=0.0, be=False, sl0=sl, lot0=lot)
+                day_trades += 1
+                ob_act.remove(z)
+                break
         # ---------- Silver Bullet: FVG แรกในชั่วโมงที่ชี้ไปทางเป้า ----------
         if p.use_silver_bullet:
             win = None
