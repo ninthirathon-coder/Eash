@@ -18,7 +18,7 @@
 //|  ที่แปะ EA (แนะนำ M5 ตามเอกสาร หรือ M1/M3 ถ้าต้องการ SL สั้น)         |
 //|  ฝั่ง Sell ใช้ราคากลับเครื่องหมาย (p' = -p) จึงเขียนโค้ดฝั่ง Buy ชุดเดียว |
 //+------------------------------------------------------------------+
-#property version   "1.10"
+#property version   "1.11"
 #property description "Order Block H1 + ยืนยัน 2 ขั้น (ค่าเริ่มต้น) / ICT 2022 Model + Wyckoff (XAUUSD). ไม่ใช่คำแนะนำการลงทุน"
 
 #include <Trade/Trade.mqh>
@@ -44,6 +44,7 @@ enum ENUM_OB_SL
 
 input group "=== ระบบ ==="
 input ENUM_STRATEGY InpStrategy = STRAT_OB; // ระบบที่ใช้เทรด
+input ENUM_TIMEFRAMES InpSignalTF = PERIOD_M5; // TF ที่ใช้คิดสัญญาณ (ไม่ขึ้นกับกราฟที่แปะ, current = ตามกราฟ)
 
 input group "=== Order Block H1 (ใช้เมื่อเลือกระบบ Order Block) ==="
 input int    InpObStart       = 800;    // เวลาเข้าได้ เริ่ม (นิวยอร์ก HHMM)
@@ -295,6 +296,8 @@ double Od(const int d, const MqlRates &b) { return d == 1 ? b.open  : -b.open;  
 
 //+------------------------------------------------------------------+
 // ความยาวช่วงเวลา (นาที) จากค่า HHMM สองค่า
+ENUM_TIMEFRAMES SigTF() { return InpSignalTF == PERIOD_CURRENT ? (ENUM_TIMEFRAMES)_Period : InpSignalTF; }
+
 int WindowMin(const int fromHHMM, const int toHHMM) { return (NyMod(toHHMM) - NyMod(fromHHMM) + 1440) % 1440; }
 
 int OnInit()
@@ -311,8 +314,9 @@ int OnInit()
             InpLondonStart, "-", InpLondonEnd, " / ", InpNYStart, "-", InpNYEnd, ") กด Reset ในแท็บ Inputs");
       return INIT_PARAMETERS_INCORRECT;
      }
-   if(PeriodSeconds(_Period) > 900)
-      Print("ICT_Wyckoff_Gold_EA: คำเตือน - EA คิดสัญญาณจาก timeframe ของกราฟ ควรใช้ M1 / M3 / M5 (ปัจจุบัน ", EnumToString(_Period), ") บน timeframe ใหญ่แทบไม่มีสัญญาณ");
+   if(PeriodSeconds(SigTF()) > 900)
+      Print("ICT_Wyckoff_Gold_EA: คำเตือน - TF สัญญาณควรเป็น M1 / M3 / M5 (ปัจจุบัน ", EnumToString(SigTF()), ") บน TF ใหญ่แทบไม่มีสัญญาณ");
+   Print("ICT_Wyckoff_Gold_EA: คิดสัญญาณจาก ", EnumToString(SigTF()), " | ระบบ ", EnumToString(InpStrategy));
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetTypeFillingBySymbol(_Symbol);
    trade.SetDeviationInPoints(30);
@@ -669,7 +673,7 @@ void DrawSweep(const datetime t, const double level)
    if(!InpDraw)
       return;
    string nm = PFX + "sw" + IntegerToString((long)t) + DoubleToString(level, 2);
-   if(ObjectCreate(0, nm, OBJ_TREND, 0, t - 30 * PeriodSeconds(), level, t + 5 * PeriodSeconds(), level))
+   if(ObjectCreate(0, nm, OBJ_TREND, 0, t - 30 * PeriodSeconds(SigTF()), level, t + 5 * PeriodSeconds(SigTF()), level))
      {
       ObjectSetInteger(0, nm, OBJPROP_COLOR, clrGold);
       ObjectSetInteger(0, nm, OBJPROP_STYLE, STYLE_DASH);
@@ -682,7 +686,7 @@ void DrawFVG(const int d, const datetime t, const double a, const double b)
    if(!InpDraw)
       return;
    string nm = PFX + "fvg" + IntegerToString((long)t) + "_" + IntegerToString(d);
-   if(ObjectCreate(0, nm, OBJ_RECTANGLE, 0, t, a, t + 20 * PeriodSeconds(), b))
+   if(ObjectCreate(0, nm, OBJ_RECTANGLE, 0, t, a, t + 20 * PeriodSeconds(SigTF()), b))
      {
       ObjectSetInteger(0, nm, OBJPROP_COLOR, d == 1 ? clrMediumSeaGreen : clrIndianRed);
       ObjectSetInteger(0, nm, OBJPROP_FILL, true);
@@ -1840,7 +1844,7 @@ string ObPanelText()
          ns++;
    string txt = "ICT Gold EA: Order Block H1\n";
    txt += "โซน OB ที่รอ: Buy " + IntegerToString(nb) + " | Sell " + IntegerToString(ns) + "\n";
-   txt += "เวลาเทรด: " + (InWindow(g_curMod + PeriodSeconds(_Period) / 60, NyMod(InpObStart), NyMod(InpObEnd)) ? "ใช่" : "ไม่ใช่") + "\n";
+   txt += "เวลาเทรด: " + (InWindow(g_curMod + PeriodSeconds(SigTF()) / 60, NyMod(InpObStart), NyMod(InpObEnd)) ? "ใช่" : "ไม่ใช่") + "\n";
    for(int si = 0; si < 2; si++)
      {
       txt += si == 0 ? "Buy : " : "Sell: ";
@@ -1897,7 +1901,7 @@ void ManageOnTick()
 void OnTick()
   {
    ManageOnTick();
-   datetime bt = iTime(_Symbol, _Period, 0);
+   datetime bt = iTime(_Symbol, SigTF(), 0);
    if(bt == g_lastBar)
       return;
    g_lastBar = bt;
@@ -1906,12 +1910,12 @@ void OnTick()
 
 void OnNewBar()
   {
-   int n = CopyRates(_Symbol, _Period, 1, BARS, r);
+   int n = CopyRates(_Symbol, SigTF(), 1, BARS, r);
    if(n < 300)
       return;
    ArraySetAsSeries(r, false);
    int i = n - 1;                                // แท่งที่เพิ่งปิด
-   int tf = PeriodSeconds(_Period) / 60;
+   int tf = PeriodSeconds(SigTF()) / 60;
    datetime t7 = T7(r[i].time);
    int mod = ModOf(t7), endm = mod + tf;
    datetime day = DayOf(t7);
@@ -2045,7 +2049,7 @@ void OnNewBar()
          continue;
       if((int)((r[i].time - g_s[si].extTime) / 60) > InpMaxMssMin)
          continue;
-      if(InpSweepPaBars > 0 && (int)((r[i].time - g_s[si].extTime) / PeriodSeconds()) <= InpSweepPaBars && PA(i, d))
+      if(InpSweepPaBars > 0 && (int)((r[i].time - g_s[si].extTime) / PeriodSeconds(SigTF())) <= InpSweepPaBars && PA(i, d))
          g_s[si].cand = true;
       if(Cd(d, r[i]) <= g_s[si].mss)
          continue;
