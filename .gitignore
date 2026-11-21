@@ -32,3 +32,6 @@ Thumbs.db
 
 # ===== ข้อมูลราคา (โหลดใหม่ได้ด้วย backtest/download_data.py) =====
 data/
+
+# ===== ผลลัพธ์หน้ากราฟ (สร้างใหม่ได้ด้วย chart/build_chart.py) =====
+chart/out/

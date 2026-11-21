@@ -16,3 +16,9 @@ API key อ่านจาก environment variable เท่านั้น ห�
 - `npx hyperframes render -o output.mp4` – render เป็น MP4
 
 `preview` รันค้างจนกด Ctrl+C ให้รันเป็น background process
+
+## หน้ากราฟแบบ TradingView (chart/)
+- `python3 chart/build_chart.py` สร้าง `chart/out/` (index.html + bars.json + trades.json) จาก `data/XAUUSD_M1.csv.gz` และไฟล์ไม้ใน `results/`
+- ตัวเลือก: `--start/--end`, `--tf` (นาทีต่อแท่งพื้นฐาน), `--trades <csv>`, `--no-volume`
+- ดูในเครื่อง: `cd chart/out && python3 -m http.server 8000`
+- volume ยืมจากทองล่วงหน้า GC=F (Yahoo) เพราะ HistData ไม่มี volume; ไฟล์ไม้จาก MT5 ถูกแปลงเวลาเซิร์ฟเวอร์เป็นนิวยอร์กด้วยคอลัมน์ `ny_hour`
