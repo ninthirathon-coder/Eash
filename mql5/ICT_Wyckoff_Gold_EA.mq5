@@ -18,7 +18,7 @@
 //|  ที่แปะ EA (แนะนำ M5 ตามเอกสาร หรือ M1/M3 ถ้าต้องการ SL สั้น)         |
 //|  ฝั่ง Sell ใช้ราคากลับเครื่องหมาย (p' = -p) จึงเขียนโค้ดฝั่ง Buy ชุดเดียว |
 //+------------------------------------------------------------------+
-#property version   "1.20"
+#property version   "1.21"
 #property description "Order Block H1 + ยืนยัน 2 ขั้น (ค่าเริ่มต้น) / ICT 2022 Model + Wyckoff (XAUUSD). ไม่ใช่คำแนะนำการลงทุน"
 
 #include <Trade/Trade.mqh>
@@ -99,7 +99,7 @@ input group "=== ป้องกันบัญชี ==="
 input double InpTotalDDPct    = 8.0;    // หยุดเทรดถาวรเมื่อ equity ต่ำกว่าทุนเริ่มต้นเกิน % นี้ (0 = ปิด)
 input double InpStartBalance  = 0;      // ทุนเริ่มต้นของบัญชี (0 = ใช้ balance ตอนเริ่ม EA ครั้งแรก)
 input double InpDailyDDPct    = 3.0;    // ขาดทุนรายวัน (นับ equity เทียบ balance ต้นวัน) ถึง % นี้ ปิดทุกไม้และหยุดวันนั้น (0 = ปิด)
-input bool   InpCloseFriday   = true;   // ปิดทุกไม้และยกเลิกออเดอร์ก่อนตลาดปิดวันศุกร์
+input bool   InpCloseFriday   = false;  // ปิดทุกไม้และยกเลิกออเดอร์ก่อนตลาดปิดวันศุกร์ (เปิดเมื่อบัญชีห้ามถือข้ามสุดสัปดาห์)
 input int    InpFridayCloseNY = 1600;   // เวลาปิดวันศุกร์ (นิวยอร์ก HHMM)
 input int    InpMaxHoldH      = 0;      // ถือได้นานสุดกี่ชั่วโมง (0 = ไม่จำกัด)
 input bool   InpSkipFomc      = true;   // งดเทรดวันประชุม FOMC (รายการวันในโค้ด 2024-2026, ตรวจก่อนใช้)
