@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>เอกสารสอน 4 รายวิชา</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --g:#0a7f4f; --g2:#e7f5ee; --ink:#1d2421; --mut:#5b6660; --line:#cfd8d3; --warn:#fff4e0; --warnb:#e0a030; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Sarabun', 'Loma', sans-serif; color: var(--ink); font-size: 11.5pt; line-height: 1.6; margin: 0; background:#fff; }
+  h1 { font-size: 22pt; color: var(--g); margin: 0 0 4px; line-height:1.3; }
+  h2 { font-size: 16pt; color: #fff; background: var(--g); padding: 6px 12px; border-radius: 4px; margin: 0 0 12px; line-height:1.35; }
+  h3 { font-size: 13pt; color: var(--g); border-bottom: 1.5px solid var(--g); padding-bottom: 2px; margin: 18px 0 8px; break-after: avoid; }
+  h4 { font-size: 11.5pt; margin: 12px 0 4px; break-after: avoid; }
+  p { margin: 4px 0 8px; }
+  ul, ol { margin: 4px 0 8px; padding-left: 22px; }
+  li { margin: 2px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 10.5pt; break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 4px 7px; vertical-align: top; text-align: left; }
+  th { background: var(--g2); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .box { background: var(--g2); border-left: 4px solid var(--g); padding: 8px 12px; margin: 8px 0 12px; break-inside: avoid; border-radius: 0 4px 4px 0; }
+  .ex { background: #f5f7f6; border: 1px solid var(--line); padding: 8px 12px; margin: 8px 0 12px; break-inside: avoid; border-radius: 4px; }
+  .ex b.t { color: var(--g); }
+  .warn { background: var(--warn); border-left: 4px solid var(--warnb); padding: 8px 12px; margin: 8px 0 12px; break-inside: avoid; }
+  .f { font-family: 'Courier New', monospace; background: #f0f2f1; padding: 1px 5px; border-radius: 3px; font-size: 10.5pt; }
+  pre { font-family: 'Courier New', monospace; background: #f0f2f1; padding: 8px 10px; border-radius: 4px; font-size: 9.5pt; line-height: 1.4; white-space: pre-wrap; break-inside: avoid; margin: 6px 0 10px; }
+  .chapter { break-before: page; }
+  .cover { height: 240mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .sub { color: var(--mut); font-size: 13pt; }
+  .cover table { margin-top: 18px; font-size: 11pt; }
+  .toc { columns: 2; column-gap: 24px; font-size: 10.5pt; } .toc > li { break-inside: avoid; margin-bottom: 10px; } .toc li { margin: 1px 0; }
+  .ans { color: var(--mut); font-size: 10.5pt; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .small { font-size: 10pt; color: var(--mut); }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<section class="cover">
+  <div class="small">เอกสารประกอบการเรียน · ฉบับสรุปเพื่อทบทวนด้วยตนเอง</div>
+  <h1>เอกสารสอน 4 รายวิชา<br>สาขาการเงิน (ภาคพิเศษ)</h1>
+  <p class="sub">สรุปเนื้อหาหลัก ตัวอย่างคำนวณ และแบบฝึกหัดพร้อมเฉลย</p>
+  <table>
+    <tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th>หมู่ / ประเภท</th></tr>
+    <tr><td>03759441</td><td>การธนาคารพาณิชย์<br><span class="small">Commercial Banking</span></td><td>850 · บรรยาย</td></tr>
+    <tr><td>03759426</td><td>คอมพิวเตอร์ประยุกต์ทางการเงินและการลงทุน<br><span class="small">Computer Application in Finance and Investment</span></td><td>850 บรรยาย · 860 ปฏิบัติ</td></tr>
+    <tr><td>03759497</td><td>สัมมนา<br><span class="small">Seminar</span></td><td>850 · บรรยาย</td></tr>
+    <tr><td>03759498</td><td>ปัญหาพิเศษ<br><span class="small">Special Problems</span></td><td>860 · ปฏิบัติ</td></tr>
+  </table>
+  <div class="warn" style="margin-top:18px">
+    <b>หมายเหตุ:</b> เอกสารนี้เรียบเรียงจากเนื้อหามาตรฐานของแต่ละวิชาในหลักสูตรการเงินระดับปริญญาตรี ไม่ใช่ประมวลรายวิชา (Course Syllabus) ฉบับทางการของอาจารย์ผู้สอน
+    ควรเทียบหัวข้อกับเอกสารที่อาจารย์แจกในชั้นเรียน และตรวจตัวเลขกฎเกณฑ์ (เช่น อัตราเงินกองทุน วงเงินคุ้มครองเงินฝาก) กับประกาศล่าสุดของ ธปท. และ สคฝ. อีกครั้ง
+  </div>
+</section>
+
+<!-- ================= TOC ================= -->
+<section class="chapter">
+  <h2>สารบัญ</h2>
+  <ol class="toc">
+    <li><b>การธนาคารพาณิชย์ (03759441)</b>
+      <ol><li>บทบาทและหน้าที่ของธนาคารพาณิชย์</li><li>งบการเงินธนาคาร</li><li>การวัดผลการดำเนินงาน (ROA, ROE, NIM, CAMELS)</li><li>การบริหารสภาพคล่อง</li><li>การบริหารสินเชื่อและความเสี่ยงด้านเครดิต</li><li>ความเสี่ยงด้านอัตราดอกเบี้ย (Gap Analysis)</li><li>เงินกองทุนและหลักเกณฑ์ Basel</li><li>การกำกับดูแลในไทย และแนวโน้ม FinTech</li><li>แบบฝึกหัด</li></ol></li>
+    <li><b>คอมพิวเตอร์ประยุกต์ทางการเงินและการลงทุน (03759426)</b>
+      <ol><li>ทักษะ Excel ที่ต้องใช้</li><li>มูลค่าเงินตามเวลา (TVM) ใน Excel</li><li>การประเมินโครงการ: NPV, IRR, XNPV</li><li>ตารางผ่อนชำระเงินกู้</li><li>ผลตอบแทนและความเสี่ยงของหลักทรัพย์</li><li>การสร้างพอร์ตโฟลิโอและ Solver</li><li>Beta, CAPM และ Regression</li><li>การประเมินมูลค่าพันธบัตรและหุ้น</li><li>Sensitivity, Scenario, Monte Carlo</li><li>เครื่องมือเสริม: VBA และ Python</li><li>แบบฝึกหัด</li></ol></li>
+    <li><b>สัมมนา (03759497)</b>
+      <ol><li>เป้าหมายของวิชา</li><li>การเลือกหัวข้อ</li><li>การทบทวนวรรณกรรม</li><li>โครงสร้างรายงานสัมมนา</li><li>การนำเสนอและการตอบคำถาม</li><li>ตัวอย่างหัวข้อ</li></ol></li>
+    <li><b>ปัญหาพิเศษ (03759498)</b>
+      <ol><li>ลักษณะของงาน</li><li>ขั้นตอนการทำงานวิจัย</li><li>ระเบียบวิธีวิจัยทางการเงินที่ใช้บ่อย</li><li>โครงสร้างรูปเล่ม 5 บท</li><li>การอ้างอิงและจริยธรรม</li><li>แผนเวลาและเช็กลิสต์</li></ol></li>
+  </ol>
+</section>
+
+<!-- =================================================================== -->
+<!-- ================= COURSE 1: COMMERCIAL BANKING ===================== -->
+<!-- =================================================================== -->
+<section class="chapter">
+  <h2>วิชาที่ 1 · การธนาคารพาณิชย์ (Commercial Banking) — 03759441</h2>
+  <div class="box"><b>เป้าหมายการเรียน:</b> เข้าใจว่าธนาคารหาเงินจากไหน เอาเงินไปใช้อย่างไร ทำกำไรจากอะไร และบริหารความเสี่ยงหลัก (สภาพคล่อง เครดิต อัตราดอกเบี้ย) ภายใต้กฎของผู้กำกับดูแลอย่างไร</div>
+
+  <h3>1.1 บทบาทและหน้าที่ของธนาคารพาณิชย์</h3>
+  <p>ธนาคารพาณิชย์เป็น <b>ตัวกลางทางการเงิน (Financial Intermediary)</b> รับเงินฝากจากผู้มีเงินออม แล้วนำไปให้กู้แก่ผู้ต้องการเงินทุน โดยทำหน้าที่สำคัญ 4 อย่าง</p>
+  <table>
+    <tr><th>หน้าที่</th><th>ความหมาย</th></tr>
+    <tr><td>แปลงระยะเวลา (Maturity Transformation)</td><td>รับเงินฝากระยะสั้น แต่ปล่อยกู้ระยะยาว เช่น สินเชื่อบ้าน 30 ปี</td></tr>
+    <tr><td>แปลงขนาด (Size Transformation)</td><td>รวมเงินฝากก้อนเล็กจำนวนมากเป็นสินเชื่อก้อนใหญ่</td></tr>
+    <tr><td>แปลงความเสี่ยง (Risk Transformation)</td><td>กระจายความเสี่ยงสินเชื่อหลายราย ผู้ฝากรับความเสี่ยงต่ำ</td></tr>
+    <tr><td>ระบบการชำระเงิน</td><td>โอนเงิน เช็ค บัตร พร้อมเพย์ QR Payment</td></tr>
+  </table>
+  <p><b>การสร้างเงินฝาก (Money Creation):</b> เมื่อธนาคารปล่อยกู้ เงินกู้นั้นกลับมาเป็นเงินฝากในระบบ ทำให้ปริมาณเงินเพิ่มขึ้น ตัวทวีเงินฝากอย่างง่าย = <span class="f">1 / อัตราเงินสำรอง</span> เช่น สำรอง 10% ⇒ เงินฝากใหม่ 100 บาท สร้างเงินฝากรวมได้สูงสุด 1,000 บาท (ในโลกจริงน้อยกว่านี้ เพราะมีการถือเงินสดและธนาคารถือสำรองส่วนเกิน)</p>
+  <p><b>แหล่งรายได้หลัก:</b> (1) รายได้ดอกเบี้ยสุทธิ (Net Interest Income) = ดอกเบี้ยรับ − ดอกเบี้ยจ่าย และ (2) รายได้ที่มิใช่ดอกเบี้ย (Non-interest Income) เช่น ค่าธรรมเนียมบัตร โอนเงิน ประกัน (Bancassurance) กองทุนรวม ที่ปรึกษาทางการเงิน</p>
+
+  <h3>1.2 งบการเงินธนาคาร</h3>
+  <h4>งบแสดงฐานะการเงิน (Balance Sheet)</h4>
+  <div class="two">
+    <table>
+      <tr><th>สินทรัพย์ (การใช้ไปของเงินทุน)</th></tr>
+      <tr><td>เงินสด และเงินฝากที่ ธปท. (สำรอง)</td></tr>
+      <tr><td>รายการระหว่างธนาคารและตลาดเงิน (Interbank)</td></tr>
+      <tr><td>เงินลงทุนในหลักทรัพย์ (พันธบัตรรัฐบาล ตราสารหนี้)</td></tr>
+      <tr><td><b>เงินให้สินเชื่อ</b> (สินทรัพย์ใหญ่ที่สุด) หัก ค่าเผื่อผลขาดทุนด้านเครดิตที่คาดว่าจะเกิดขึ้น (ECL)</td></tr>
+      <tr><td>ที่ดิน อาคาร อุปกรณ์ และสินทรัพย์อื่น</td></tr>
+    </table>
+    <table>
+      <tr><th>หนี้สินและส่วนของเจ้าของ (แหล่งที่มาของเงินทุน)</th></tr>
+      <tr><td><b>เงินรับฝาก</b>: กระแสรายวัน ออมทรัพย์ ประจำ (แหล่งเงินหลัก)</td></tr>
+      <tr><td>รายการระหว่างธนาคารและตลาดเงิน (ด้านหนี้สิน)</td></tr>
+      <tr><td>ตราสารหนี้ที่ออก และเงินกู้ยืม</td></tr>
+      <tr><td>หนี้สินอื่น</td></tr>
+      <tr><td><b>ส่วนของเจ้าของ</b>: ทุนเรือนหุ้น กำไรสะสม (กันชนรับความเสียหาย)</td></tr>
+    </table>
+  </div>
+  <p>ลักษณะพิเศษ: ธนาคารมี <b>อัตราส่วนหนี้สินสูงมาก</b> (ส่วนของเจ้าของมักเพียง ~10–15% ของสินทรัพย์) จึงต้องถูกกำกับเข้มงวด</p>
+  <h4>งบกำไรขาดทุน (Income Statement) แบบย่อ</h4>
+  <pre>  ดอกเบี้ยรับ
+− ดอกเบี้ยจ่าย
+= รายได้ดอกเบี้ยสุทธิ (NII)
++ รายได้ค่าธรรมเนียมและบริการสุทธิ + รายได้อื่น
+= รายได้จากการดำเนินงานรวม
+− ค่าใช้จ่ายในการดำเนินงาน (พนักงาน อาคาร IT)
+= กำไรก่อนสำรองและภาษี (Pre-provision Operating Profit, PPOP)
+− ผลขาดทุนด้านเครดิตที่คาดว่าจะเกิดขึ้น (Provision / ECL)
+= กำไรก่อนภาษี − ภาษี = กำไรสุทธิ</pre>
+
+  <h3>1.3 การวัดผลการดำเนินงาน</h3>
+  <table>
+    <tr><th>อัตราส่วน</th><th>สูตร</th><th>ใช้ดูอะไร</th></tr>
+    <tr><td>ROA</td><td>กำไรสุทธิ / สินทรัพย์รวมเฉลี่ย</td><td>ประสิทธิภาพการใช้สินทรัพย์ (ธนาคารดี ~1–1.5%)</td></tr>
+    <tr><td>ROE</td><td>กำไรสุทธิ / ส่วนของเจ้าของเฉลี่ย</td><td>ผลตอบแทนต่อผู้ถือหุ้น</td></tr>
+    <tr><td>Equity Multiplier (EM)</td><td>สินทรัพย์ / ส่วนของเจ้าของ</td><td>ระดับ Leverage</td></tr>
+    <tr><td>NIM</td><td>(ดอกเบี้ยรับ − ดอกเบี้ยจ่าย) / สินทรัพย์ที่ก่อให้เกิดรายได้เฉลี่ย</td><td>ส่วนต่างดอกเบี้ย (ไทยมัก ~2.5–3.5%)</td></tr>
+    <tr><td>Spread</td><td>อัตราผลตอบแทนสินทรัพย์ − ต้นทุนเงินทุน</td><td>ความสามารถในการตั้งราคา</td></tr>
+    <tr><td>Cost-to-Income</td><td>ค่าใช้จ่ายดำเนินงาน / รายได้ดำเนินงานรวม</td><td>ประสิทธิภาพต้นทุน (ยิ่งต่ำยิ่งดี)</td></tr>
+    <tr><td>NPL Ratio</td><td>สินเชื่อด้อยคุณภาพ (ค้าง &gt; 90 วัน, Stage 3) / สินเชื่อรวม</td><td>คุณภาพสินเชื่อ</td></tr>
+    <tr><td>Coverage Ratio</td><td>ค่าเผื่อผลขาดทุนฯ / NPL</td><td>ความพร้อมรองรับหนี้เสีย</td></tr>
+    <tr><td>Loan-to-Deposit (LDR)</td><td>สินเชื่อ / เงินฝาก</td><td>สภาพคล่องเชิงโครงสร้าง</td></tr>
+  </table>
+  <div class="box"><b>DuPont สำหรับธนาคาร:</b> <span class="f">ROE = ROA × EM</span> และ <span class="f">ROA = Profit Margin × Asset Utilization</span> (กำไรสุทธิ/รายได้รวม × รายได้รวม/สินทรัพย์)<br>
+  ⇒ ROE สูงอาจมาจากการทำกำไรดี <i>หรือ</i> จากการใช้หนี้มาก (เสี่ยงกว่า) ต้องแยกให้ออก</div>
+  <div class="ex"><b class="t">ตัวอย่าง 1.1</b> ธนาคาร A มีสินทรัพย์เฉลี่ย 2,000,000 ล้านบาท ส่วนของเจ้าของเฉลี่ย 250,000 ล้านบาท กำไรสุทธิ 24,000 ล้านบาท ดอกเบี้ยรับ 90,000 ล้านบาท ดอกเบี้ยจ่าย 30,000 ล้านบาท สินทรัพย์ก่อรายได้ 1,800,000 ล้านบาท<br>
+  ROA = 24,000/2,000,000 = <b>1.20%</b> · EM = 2,000,000/250,000 = <b>8 เท่า</b> · ROE = 1.2% × 8 = <b>9.6%</b><br>
+  NIM = (90,000 − 30,000)/1,800,000 = <b>3.33%</b></div>
+
+  <h4>CAMELS Rating — กรอบประเมินธนาคารของผู้กำกับ</h4>
+  <table>
+    <tr><th>ตัวอักษร</th><th>ด้าน</th><th>ตัวชี้วัดตัวอย่าง</th></tr>
+    <tr><td>C</td><td>Capital Adequacy เงินกองทุน</td><td>CAR, CET1 ratio</td></tr>
+    <tr><td>A</td><td>Asset Quality คุณภาพสินทรัพย์</td><td>NPL ratio, Coverage</td></tr>
+    <tr><td>M</td><td>Management การบริหาร</td><td>ธรรมาภิบาล ระบบควบคุมภายใน</td></tr>
+    <tr><td>E</td><td>Earnings กำไร</td><td>ROA, NIM, Cost-to-Income</td></tr>
+    <tr><td>L</td><td>Liquidity สภาพคล่อง</td><td>LCR, NSFR, LDR</td></tr>
+    <tr><td>S</td><td>Sensitivity to Market Risk</td><td>Gap, Duration Gap</td></tr>
+  </table>
+
+  <h3>1.4 การบริหารสภาพคล่อง (Liquidity Management)</h3>
+  <p>ความเสี่ยงด้านสภาพคล่อง = ธนาคารไม่มีเงินพอจ่ายผู้ฝากที่ถอน หรือรองรับความต้องการสินเชื่อ โดยไม่ต้องขายสินทรัพย์ราคาต่ำ เหตุการณ์รุนแรงคือ <b>Bank Run</b> (เช่น กรณี Silicon Valley Bank ปี 2023)</p>
+  <ul>
+    <li><b>Asset Liquidity Management:</b> ถือสินทรัพย์สภาพคล่องสูง (เงินสด พันธบัตรรัฐบาล) — ปลอดภัยแต่ผลตอบแทนต่ำ</li>
+    <li><b>Liability Management:</b> กู้เมื่อต้องการ (ตลาดเงินระหว่างธนาคาร Repo ออกตั๋วเงิน) — ยืดหยุ่นแต่ต้นทุนผันผวน</li>
+    <li><b>Balanced:</b> ผสมทั้งสองแบบ — ที่นิยมใช้จริง</li>
+  </ul>
+  <table>
+    <tr><th>มาตรฐาน Basel III</th><th>สูตร</th><th>เกณฑ์ขั้นต่ำ</th></tr>
+    <tr><td>LCR (Liquidity Coverage Ratio)</td><td>สินทรัพย์สภาพคล่องสูง (HQLA) / กระแสเงินสดไหลออกสุทธิใน 30 วันภายใต้ภาวะวิกฤต</td><td>≥ 100%</td></tr>
+    <tr><td>NSFR (Net Stable Funding Ratio)</td><td>แหล่งเงินทุนมั่นคงที่มีอยู่ / แหล่งเงินทุนมั่นคงที่ต้องมี (มุมมอง 1 ปี)</td><td>≥ 100%</td></tr>
+  </table>
+  <div class="ex"><b class="t">ตัวอย่าง 1.2 — ประมาณความต้องการสภาพคล่อง (Sources &amp; Uses)</b><br>
+  คาดว่าเดือนหน้าเงินฝากจะลดลง 1,200 ล้านบาท และลูกค้าจะเบิกสินเชื่อใหม่ 800 ล้านบาท ขณะมีสินเชื่อครบกำหนดชำระคืน 500 ล้านบาท<br>
+  ความต้องการสภาพคล่องสุทธิ = 1,200 + 800 − 500 = <b>1,500 ล้านบาท</b> ⇒ ต้องเตรียมจากการขายหลักทรัพย์ หรือกู้ในตลาดเงิน</div>
+
+  <h3>1.5 การบริหารสินเชื่อและความเสี่ยงด้านเครดิต</h3>
+  <h4>หลักวิเคราะห์สินเชื่อ 5C</h4>
+  <table>
+    <tr><th>C</th><th>ความหมาย</th><th>ดูจาก</th></tr>
+    <tr><td>Character</td><td>ความตั้งใจชำระหนี้</td><td>ประวัติเครดิตบูโร (NCB) ประวัติธุรกิจ</td></tr>
+    <tr><td>Capacity</td><td>ความสามารถชำระหนี้</td><td>กระแสเงินสด DSCR, DTI</td></tr>
+    <tr><td>Capital</td><td>ฐานะทุน</td><td>D/E, ส่วนของเจ้าของ</td></tr>
+    <tr><td>Collateral</td><td>หลักประกัน</td><td>LTV = วงเงินกู้ / มูลค่าหลักประกัน</td></tr>
+    <tr><td>Conditions</td><td>ภาวะเศรษฐกิจและอุตสาหกรรม</td><td>วัฏจักรธุรกิจ นโยบายรัฐ</td></tr>
+  </table>
+  <p><b>DSCR (Debt Service Coverage Ratio)</b> = กระแสเงินสดจากการดำเนินงาน / ภาระชำระหนี้ (เงินต้น+ดอกเบี้ย) ต่อปี — ธนาคารมักต้องการ ≥ 1.2–1.5 เท่า<br>
+  <b>DTI (Debt-to-Income)</b> สำหรับสินเชื่อบุคคล = ภาระผ่อนต่อเดือน / รายได้ต่อเดือน</p>
+  <h4>การจัดชั้นสินเชื่อตาม TFRS 9 (3 Stages)</h4>
+  <table>
+    <tr><th>Stage</th><th>สถานะ</th><th>การตั้งสำรอง (ECL)</th></tr>
+    <tr><td>1 Performing</td><td>ปกติ ค้างชำระ ≤ 30 วัน</td><td>ผลขาดทุนที่คาดว่าจะเกิดใน 12 เดือน</td></tr>
+    <tr><td>2 Under-performing</td><td>ความเสี่ยงเพิ่มขึ้นมีนัยสำคัญ ค้าง 31–90 วัน</td><td>ตลอดอายุสินเชื่อ (Lifetime)</td></tr>
+    <tr><td>3 Non-performing (NPL)</td><td>ด้อยค่า ค้าง &gt; 90 วัน</td><td>ตลอดอายุสินเชื่อ</td></tr>
+  </table>
+  <div class="box"><b>ECL = PD × LGD × EAD</b><br>PD = โอกาสผิดนัด · LGD = สัดส่วนความเสียหายเมื่อผิดนัด (1 − อัตราการเรียกคืน) · EAD = ยอดหนี้ ณ วันผิดนัด</div>
+  <div class="ex"><b class="t">ตัวอย่าง 1.3</b> สินเชื่อ 10 ล้านบาท PD 12 เดือน = 2% หลักประกันคาดว่าเรียกคืนได้ 60% ⇒ LGD = 40%<br>
+  ECL = 0.02 × 0.40 × 10,000,000 = <b>80,000 บาท</b> (ต้องตั้งสำรองจำนวนนี้หากอยู่ Stage 1)</div>
+  <h4>การตั้งราคาสินเชื่อ (Loan Pricing)</h4>
+  <p><span class="f">อัตราดอกเบี้ยเงินกู้ = ต้นทุนเงินทุน + ต้นทุนดำเนินงาน + ส่วนชดเชยความเสี่ยงผิดนัด + กำไรที่ต้องการ</span><br>
+  ในไทยอ้างอิงอัตราดอกเบี้ยลอยตัว <b>MLR</b> (ลูกค้ารายใหญ่ชั้นดี มีระยะเวลา), <b>MOR</b> (ลูกค้ารายใหญ่ชั้นดี เบิกเกินบัญชี), <b>MRR</b> (ลูกค้ารายย่อยชั้นดี) เช่น สินเชื่อบ้าน "MRR − 1.5%"</p>
+
+  <h3>1.6 ความเสี่ยงด้านอัตราดอกเบี้ย (Interest Rate Risk)</h3>
+  <p>เกิดจากสินทรัพย์และหนี้สินมีการปรับอัตราดอกเบี้ย (Repricing) ไม่พร้อมกัน</p>
+  <div class="box"><b>Repricing Gap = RSA − RSL</b> (RSA = สินทรัพย์อ่อนไหวต่ออัตราดอกเบี้ย, RSL = หนี้สินอ่อนไหวฯ ในช่วงเวลาเดียวกัน)<br>
+  <b>ΔNII ≈ Gap × Δr</b><br>
+  Gap บวก (Asset-sensitive): ดอกเบี้ยขึ้น ⇒ NII เพิ่ม · Gap ลบ (Liability-sensitive): ดอกเบี้ยขึ้น ⇒ NII ลด</div>
+  <div class="ex"><b class="t">ตัวอย่าง 1.4</b> ในช่วง 1 ปี RSA = 500 ล้านบาท RSL = 700 ล้านบาท ⇒ Gap = −200 ล้านบาท<br>
+  หากอัตราดอกเบี้ยเพิ่ม 0.50% ⇒ ΔNII = −200 × 0.005 = <b>−1 ล้านบาท</b> (รายได้ดอกเบี้ยสุทธิลดลง)</div>
+  <p><b>Duration Gap</b> (มองผลต่อมูลค่าส่วนของเจ้าของ): <span class="f">DGAP = D<sub>A</sub> − (L/A)·D<sub>L</sub></span> และ <span class="f">ΔE ≈ −DGAP × A × Δr/(1+r)</span></p>
+  <div class="ex"><b class="t">ตัวอย่าง 1.5</b> A = 1,000 ล้าน, L = 900 ล้าน, D<sub>A</sub> = 4 ปี, D<sub>L</sub> = 2 ปี, r = 5%<br>
+  DGAP = 4 − 0.9×2 = 2.2 ปี · หากดอกเบี้ยขึ้น 1% ⇒ ΔE ≈ −2.2 × 1,000 × 0.01/1.05 = <b>−20.95 ล้านบาท</b></div>
+
+  <h3>1.7 เงินกองทุนและหลักเกณฑ์ Basel</h3>
+  <table>
+    <tr><th>Basel</th><th>สาระสำคัญ</th></tr>
+    <tr><td>Basel I (1988)</td><td>เงินกองทุน ≥ 8% ของสินทรัพย์เสี่ยง เน้นความเสี่ยงด้านเครดิต</td></tr>
+    <tr><td>Basel II (2004)</td><td>3 เสาหลัก: (1) เงินกองทุนขั้นต่ำ (เครดิต ตลาด ปฏิบัติการ) (2) การกำกับตรวจสอบ (3) วินัยตลาด/การเปิดเผยข้อมูล</td></tr>
+    <tr><td>Basel III (2010–)</td><td>เพิ่มคุณภาพทุน (CET1) Conservation Buffer 2.5% Countercyclical Buffer, D-SIBs Buffer, LCR, NSFR, Leverage Ratio</td></tr>
+  </table>
+  <div class="box"><b>CAR = เงินกองทุนทั้งสิ้น / สินทรัพย์เสี่ยง (Risk-Weighted Assets, RWA)</b><br>
+  RWA = Σ (ยอดสินทรัพย์ × น้ำหนักความเสี่ยง) เช่น เงินสด/พันธบัตรรัฐบาลไทย 0%, สินเชื่อที่อยู่อาศัย ~35%, สินเชื่อธุรกิจทั่วไป 100%<br>
+  เกณฑ์ ธปท. (โดยรวม): CET1 ≥ 4.5% + Buffer 2.5% ⇒ 7%; Tier 1 ≥ 8.5%; CAR ≥ 11% (ธนาคารที่เป็น D-SIBs ต้องเพิ่มอีก 1%)</div>
+  <div class="ex"><b class="t">ตัวอย่าง 1.6</b>
+  <table>
+    <tr><th>สินทรัพย์</th><th class="num">ยอด (ล้านบาท)</th><th class="num">น้ำหนัก</th><th class="num">RWA</th></tr>
+    <tr><td>เงินสด+พันธบัตรรัฐบาล</td><td class="num">200</td><td class="num">0%</td><td class="num">0</td></tr>
+    <tr><td>สินเชื่อที่อยู่อาศัย</td><td class="num">400</td><td class="num">35%</td><td class="num">140</td></tr>
+    <tr><td>สินเชื่อธุรกิจ</td><td class="num">600</td><td class="num">100%</td><td class="num">600</td></tr>
+    <tr><th>รวม</th><th class="num">1,200</th><th></th><th class="num">740</th></tr>
+  </table>
+  ถ้าเงินกองทุนทั้งสิ้น 90 ล้านบาท ⇒ CAR = 90/740 = <b>12.16%</b> ผ่านเกณฑ์ 11%</div>
+
+  <h3>1.8 การกำกับดูแลในไทย และแนวโน้ม</h3>
+  <ul>
+    <li><b>ธนาคารแห่งประเทศไทย (ธปท.)</b>: กำกับสถาบันการเงินตาม พ.ร.บ.ธุรกิจสถาบันการเงิน พ.ศ. 2551 กำหนดนโยบายการเงินผ่าน <b>อัตราดอกเบี้ยนโยบาย</b> (กนง.)</li>
+    <li><b>สถาบันคุ้มครองเงินฝาก (สคฝ.)</b>: คุ้มครองเงินฝาก <b>1 ล้านบาทต่อผู้ฝากต่อสถาบันการเงิน</b> (ตรวจสอบตัวเลขล่าสุดอีกครั้ง)</li>
+    <li><b>มาตรการ LTV</b> สำหรับสินเชื่อที่อยู่อาศัย และแนวทาง <b>Responsible Lending</b> แก้หนี้ครัวเรือน</li>
+    <li><b>FinTech / Digital Banking</b>: PromptPay, Mobile Banking, Open Banking (Your Data), <b>Virtual Bank</b> (ธปท. อนุญาตผู้ให้บริการกลุ่มแรกปี 2568), Digital Lending, การใช้ข้อมูลทางเลือก (Alternative Data) ในการปล่อยกู้</li>
+    <li><b>ESG / Sustainable Finance</b>: Green Loan, Sustainability-linked Loan, Thailand Taxonomy</li>
+  </ul>
+
+  <h3>1.9 แบบฝึกหัด — การธนาคารพาณิชย์</h3>
+  <ol>
+    <li>ธนาคารมี ROA 1.1% และ Equity Multiplier 9.5 เท่า จงหา ROE<br><span class="ans">เฉลย: 1.1% × 9.5 = 10.45%</span></li>
+    <li>ดอกเบี้ยรับ 50,000 ดอกเบี้ยจ่าย 18,000 สินทรัพย์ก่อรายได้เฉลี่ย 1,100,000 (ล้านบาท) จงหา NIM<br><span class="ans">เฉลย: 32,000/1,100,000 = 2.91%</span></li>
+    <li>RSA = 800 RSL = 650 ล้านบาท ดอกเบี้ยลดลง 0.25% NII เปลี่ยนแปลงเท่าใด<br><span class="ans">เฉลย: Gap = +150 ⇒ ΔNII = 150 × (−0.0025) = −0.375 ล้านบาท</span></li>
+    <li>สินเชื่อ 5 ล้านบาท PD 3% LGD 45% จงหา ECL<br><span class="ans">เฉลย: 0.03 × 0.45 × 5,000,000 = 67,500 บาท</span></li>
+    <li>อธิบายว่าทำไมธนาคารที่มี LDR สูงมาก (เช่น 110%) จึงมีความเสี่ยงด้านสภาพคล่องสูงกว่า<br><span class="ans">แนวตอบ: ปล่อยกู้มากกว่าเงินฝาก ต้องพึ่งแหล่งเงินจากตลาดเงินซึ่งไม่มั่นคงและต้นทุนผันผวน เมื่อเกิดวิกฤตหาเงินทุนทดแทนยาก</span></li>
+    <li>เปรียบเทียบ LCR กับ NSFR<br><span class="ans">แนวตอบ: LCR วัดความอยู่รอดระยะสั้น 30 วันภายใต้ภาวะวิกฤต; NSFR วัดความสมดุลเชิงโครงสร้างระยะ 1 ปี ระหว่างแหล่งเงินทุนมั่นคงกับสินทรัพย์ที่ต้องใช้เงินทุนระยะยาว</span></li>
+  </ol>
+</section>
+
+<!-- =================================================================== -->
+<!-- ================= COURSE 2: COMPUTER APP IN FINANCE ================ -->
+<!-- =================================================================== -->
+<section class="chapter">
+  <h2>วิชาที่ 2 · คอมพิวเตอร์ประยุกต์ทางการเงินและการลงทุน — 03759426</h2>
+  <div class="box"><b>เป้าหมายการเรียน:</b> ใช้ Excel (และเครื่องมือเสริม เช่น Python) สร้างแบบจำลองทางการเงิน: มูลค่าเงินตามเวลา งบประมาณลงทุน ตารางเงินกู้ ผลตอบแทน–ความเสี่ยง พอร์ตโฟลิโอ CAPM การประเมินมูลค่าหลักทรัพย์ และการวิเคราะห์ความไว<br>
+  หมู่ 850 (บรรยาย) = แนวคิด · หมู่ 860 (ปฏิบัติ) = ลงมือทำในห้องคอม</div>
+
+  <h3>2.1 ทักษะ Excel ที่ต้องใช้</h3>
+  <table>
+    <tr><th>ทักษะ</th><th>ตัวอย่าง</th><th>เคล็ดลับ</th></tr>
+    <tr><td>การอ้างอิงเซลล์</td><td><span class="f">A1</span> สัมพัทธ์ · <span class="f">$A$1</span> สัมบูรณ์ · <span class="f">A$1</span> ผสม</td><td>กด F4 สลับรูปแบบ — สำคัญมากเวลาลากสูตร</td></tr>
+    <tr><td>ฟังก์ชันตรรกะ</td><td><span class="f">=IF(B2&gt;0,"กำไร","ขาดทุน")</span></td><td>ใช้ร่วม AND/OR/IFS</td></tr>
+    <tr><td>ค้นหาข้อมูล</td><td><span class="f">=XLOOKUP(รหัส,คอลัมน์รหัส,คอลัมน์ราคา)</span></td><td>รุ่นเก่าใช้ VLOOKUP/INDEX-MATCH</td></tr>
+    <tr><td>สถิติ</td><td>AVERAGE, STDEV.S, VAR.S, CORREL, COVARIANCE.S</td><td>.S = ตัวอย่าง .P = ประชากร</td></tr>
+    <tr><td>ตั้งชื่อช่วง</td><td>Formulas › Define Name เช่น <span class="f">Rate</span></td><td>สูตรอ่านง่าย ลดข้อผิดพลาด</td></tr>
+    <tr><td>Data Table / Goal Seek / Solver</td><td>Data › What-If Analysis</td><td>Solver ต้องเปิด Add-in ก่อน</td></tr>
+    <tr><td>PivotTable, Chart</td><td>สรุปและแสดงผลข้อมูล</td><td>ใช้ทำรายงานผลตอบแทนรายปี</td></tr>
+  </table>
+  <div class="warn"><b>หลักการสร้างโมเดลที่ดี:</b> แยกส่วน <b>Input</b> (สีฟ้า) – <b>Calculation</b> – <b>Output</b> · ห้ามพิมพ์ตัวเลขลงในสูตรตรง ๆ (hard-code) · หนึ่งแถวหนึ่งสูตรเดียวกัน · ใส่หน่วยและแหล่งที่มาข้อมูล</div>
+
+  <h3>2.2 มูลค่าเงินตามเวลา (Time Value of Money)</h3>
+  <p>รูปแบบฟังก์ชัน: <span class="f">=FV(rate, nper, pmt, [pv], [type])</span> · <span class="f">=PV(rate, nper, pmt, [fv], [type])</span> · <span class="f">=PMT(rate, nper, pv, [fv], [type])</span> · <span class="f">=NPER(...)</span> · <span class="f">=RATE(nper, pmt, pv, [fv])</span></p>
+  <div class="box"><b>กฎเครื่องหมาย:</b> เงินจ่ายออก = ลบ เงินรับเข้า = บวก · <b>type</b> = 0 จ่ายปลายงวด (Ordinary Annuity), 1 จ่ายต้นงวด (Annuity Due) · หากจ่ายรายเดือน ต้องใช้ <span class="f">rate/12</span> และ <span class="f">nper*12</span></div>
+  <table>
+    <tr><th>โจทย์</th><th>สูตร Excel</th><th class="num">คำตอบ</th></tr>
+    <tr><td>ฝาก 100,000 บาท ดอกเบี้ย 5%/ปี 10 ปี มีเงินเท่าใด</td><td><span class="f">=FV(5%,10,0,-100000)</span></td><td class="num">162,889.46</td></tr>
+    <tr><td>ต้องการ 1 ล้านใน 20 ปี ผลตอบแทน 6% ต้องลงทุนตอนนี้เท่าใด</td><td><span class="f">=PV(6%,20,0,1000000)</span></td><td class="num">−311,804.73</td></tr>
+    <tr><td>ออมเดือนละ 3,000 บาท 30 ปี ผลตอบแทน 7%/ปี</td><td><span class="f">=FV(7%/12,360,-3000)</span></td><td class="num">3,659,912.99</td></tr>
+    <tr><td>กู้บ้าน 3 ล้าน 30 ปี ดอกเบี้ย 6%/ปี ผ่อนเดือนละ</td><td><span class="f">=PMT(6%/12,360,3000000)</span></td><td class="num">−17,986.52</td></tr>
+    <tr><td>กู้ 500,000 ผ่อน 12,000/เดือน 4 ปี ดอกเบี้ยต่อปี</td><td><span class="f">=RATE(48,-12000,500000)*12</span></td><td class="num">≈ 7.12%</td></tr>
+  </table>
+  <p><b>อัตราดอกเบี้ยที่แท้จริง (EAR):</b> <span class="f">=EFFECT(nominal, npery)</span> เช่น 12% ทบรายเดือน ⇒ <span class="f">=EFFECT(12%,12)</span> = 12.68% · ย้อนกลับใช้ <span class="f">=NOMINAL(...)</span></p>
+
+  <h3>2.3 การประเมินโครงการลงทุน (Capital Budgeting)</h3>
+  <table>
+    <tr><th>เกณฑ์</th><th>สูตร Excel</th><th>เกณฑ์ตัดสินใจ</th></tr>
+    <tr><td>NPV</td><td><span class="f">=NPV(r, CF1:CFn) + CF0</span></td><td>NPV &gt; 0 ยอมรับ</td></tr>
+    <tr><td>IRR</td><td><span class="f">=IRR(CF0:CFn)</span></td><td>IRR &gt; ต้นทุนเงินทุน ยอมรับ</td></tr>
+    <tr><td>MIRR</td><td><span class="f">=MIRR(CF0:CFn, finance_rate, reinvest_rate)</span></td><td>แก้ปัญหา IRR หลายค่า</td></tr>
+    <tr><td>Profitability Index</td><td>PV ของกระแสเงินสดเข้า / เงินลงทุน</td><td>PI &gt; 1</td></tr>
+    <tr><td>Payback Period</td><td>นับงวดจากกระแสเงินสดสะสม</td><td>สั้นกว่าเป้าหมาย</td></tr>
+    <tr><td>XNPV / XIRR</td><td><span class="f">=XNPV(r, values, dates)</span></td><td>ใช้เมื่อกระแสเงินสดไม่เป็นงวดเท่ากัน</td></tr>
+  </table>
+  <div class="warn"><b>กับดักที่พบบ่อย:</b> ฟังก์ชัน <span class="f">NPV()</span> ของ Excel คิดลดตั้งแต่งวดที่ 1 เสมอ ห้ามใส่ CF0 ไว้ในช่วง ต้องบวก CF0 แยกนอกฟังก์ชัน</div>
+  <div class="ex"><b class="t">ตัวอย่าง 2.1</b> โครงการลงทุน 1,000,000 บาท ได้กระแสเงินสด 300,000 · 350,000 · 400,000 · 250,000 ในปีที่ 1–4 ต้นทุนเงินทุน 10%
+  <pre>     A          B
+1  ปี         กระแสเงินสด
+2  0          -1,000,000
+3  1             300,000
+4  2             350,000
+5  3             400,000
+6  4             250,000
+8  NPV   =NPV(10%,B3:B6)+B2   → 33,262.76 บาท
+9  IRR   =IRR(B2:B6)          → 11.54%</pre>
+  NPV &gt; 0 และ IRR 11.54% &gt; 10% ⇒ <b>ยอมรับโครงการ</b> (Payback ≈ 2 + 350,000/400,000 = 2.88 ปี)</div>
+
+  <h3>2.4 ตารางผ่อนชำระเงินกู้ (Loan Amortization)</h3>
+  <p>กู้ 100,000 บาท ดอกเบี้ย 8%/ปี ผ่อนรายปี 5 ปี ⇒ <span class="f">=PMT(8%,5,-100000)</span> = 25,045.65</p>
+  <table>
+    <tr><th>งวด</th><th class="num">ยอดต้นงวด</th><th class="num">ค่างวด</th><th class="num">ดอกเบี้ย</th><th class="num">เงินต้น</th><th class="num">ยอดปลายงวด</th></tr>
+    <tr><td>1</td><td class="num">100,000.00</td><td class="num">25,045.65</td><td class="num">8,000.00</td><td class="num">17,045.65</td><td class="num">82,954.35</td></tr>
+    <tr><td>2</td><td class="num">82,954.35</td><td class="num">25,045.65</td><td class="num">6,636.35</td><td class="num">18,409.30</td><td class="num">64,545.06</td></tr>
+    <tr><td>3</td><td class="num">64,545.06</td><td class="num">25,045.65</td><td class="num">5,163.60</td><td class="num">19,882.04</td><td class="num">44,663.02</td></tr>
+    <tr><td>4</td><td class="num">44,663.02</td><td class="num">25,045.65</td><td class="num">3,573.04</td><td class="num">21,472.60</td><td class="num">23,190.41</td></tr>
+    <tr><td>5</td><td class="num">23,190.41</td><td class="num">25,045.65</td><td class="num">1,855.23</td><td class="num">23,190.41</td><td class="num">≈ 0</td></tr>
+  </table>
+  <p>สูตรในแต่ละแถว: ดอกเบี้ย <span class="f">=B2*$Rate</span> · เงินต้น <span class="f">=C2-D2</span> · ยอดปลายงวด <span class="f">=B2-E2</span> · หรือใช้ <span class="f">=IPMT()</span>, <span class="f">=PPMT()</span>, และ <span class="f">=CUMIPMT()</span> หาดอกเบี้ยสะสม</p>
+
+  <h3>2.5 ผลตอบแทนและความเสี่ยงของหลักทรัพย์</h3>
+  <table>
+    <tr><th>ค่า</th><th>สูตร</th><th>Excel</th></tr>
+    <tr><td>ผลตอบแทนรายงวด (Simple)</td><td>(P<sub>t</sub> − P<sub>t−1</sub> + D<sub>t</sub>) / P<sub>t−1</sub></td><td><span class="f">=(B3-B2)/B2</span></td></tr>
+    <tr><td>ผลตอบแทนแบบต่อเนื่อง (Log)</td><td>ln(P<sub>t</sub>/P<sub>t−1</sub>)</td><td><span class="f">=LN(B3/B2)</span></td></tr>
+    <tr><td>ผลตอบแทนเฉลี่ย</td><td>Σr / n</td><td><span class="f">=AVERAGE(C3:C61)</span></td></tr>
+    <tr><td>ส่วนเบี่ยงเบนมาตรฐาน (ความเสี่ยง)</td><td>√[Σ(r − r̄)² / (n−1)]</td><td><span class="f">=STDEV.S(C3:C61)</span></td></tr>
+    <tr><td>แปลงเป็นรายปี (ข้อมูลรายเดือน)</td><td>μ×12, σ×√12</td><td><span class="f">=STDEV.S(...)*SQRT(12)</span></td></tr>
+    <tr><td>Sharpe Ratio</td><td>(R<sub>p</sub> − R<sub>f</sub>) / σ<sub>p</sub></td><td>วัดผลตอบแทนต่อหน่วยความเสี่ยง</td></tr>
+    <tr><td>Geometric Mean</td><td>[Π(1+r)]<sup>1/n</sup> − 1</td><td><span class="f">=GEOMEAN(1+C3:C61)-1</span></td></tr>
+  </table>
+  <p>แหล่งข้อมูล: SETSMART, เว็บไซต์ตลาดหลักทรัพย์ฯ (set.or.th), ThaiBMA (ตราสารหนี้), ธปท. (อัตราดอกเบี้ย), Yahoo Finance (เช่น <span class="f">PTT.BK</span>), หรือฟีเจอร์ Stocks Data Type ใน Excel 365</p>
+
+  <h3>2.6 การสร้างพอร์ตโฟลิโอ (Markowitz) และ Solver</h3>
+  <div class="box">ผลตอบแทนพอร์ต <b>E(R<sub>p</sub>) = Σ w<sub>i</sub>E(R<sub>i</sub>)</b><br>
+  ความแปรปรวนพอร์ต 2 หลักทรัพย์ <b>σ<sub>p</sub>² = w<sub>1</sub>²σ<sub>1</sub>² + w<sub>2</sub>²σ<sub>2</sub>² + 2w<sub>1</sub>w<sub>2</sub>ρ<sub>12</sub>σ<sub>1</sub>σ<sub>2</sub></b><br>
+  แบบเมทริกซ์ (หลายหลักทรัพย์): <span class="f">σp² = wᵀ Σ w</span> ⇒ Excel: <span class="f">=MMULT(TRANSPOSE(w),MMULT(CovMatrix,w))</span></div>
+  <div class="ex"><b class="t">ตัวอย่าง 2.2</b> หุ้น A: E(R)=12%, σ=20% · หุ้น B: E(R)=8%, σ=12% · ρ = 0.3 · ลงทุน A 60% B 40%<br>
+  E(R<sub>p</sub>) = 0.6(12%) + 0.4(8%) = <b>10.4%</b><br>
+  σ<sub>p</sub>² = 0.36(0.04) + 0.16(0.0144) + 2(0.6)(0.4)(0.3)(0.2)(0.12) = 0.0144 + 0.002304 + 0.003456 = 0.02016 ⇒ σ<sub>p</sub> = <b>14.20%</b><br>
+  สังเกต: ความเสี่ยงพอร์ต (14.2%) ต่ำกว่าค่าเฉลี่ยถ่วงน้ำหนัก (16.8%) = ผลของการกระจายความเสี่ยง</div>
+  <h4>ขั้นตอนหาพอร์ตความเสี่ยงต่ำสุด / Sharpe สูงสุดด้วย Solver</h4>
+  <ol>
+    <li>คำนวณผลตอบแทนเฉลี่ยรายปีและ Covariance Matrix (Data › Data Analysis › Covariance หรือ <span class="f">COVARIANCE.S</span>)</li>
+    <li>สร้างเซลล์น้ำหนัก w<sub>i</sub> (เริ่มต้นเท่ากัน) และคำนวณ E(R<sub>p</sub>), σ<sub>p</sub>, Sharpe</li>
+    <li>Data › Solver: <b>Set Objective</b> = σ<sub>p</sub> (Min) หรือ Sharpe (Max) · <b>By Changing</b> = เซลล์น้ำหนัก</li>
+    <li>Constraints: ผลรวมน้ำหนัก = 1 · w<sub>i</sub> ≥ 0 (ห้าม Short) · (ถ้าทำ Efficient Frontier: E(R<sub>p</sub>) = เป้าหมาย)</li>
+    <li>Solving Method: <b>GRG Nonlinear</b> · เปลี่ยนเป้าหมายผลตอบแทนหลาย ๆ ค่าแล้ววาดกราฟ σ<sub>p</sub> (แกน X) กับ E(R<sub>p</sub>) (แกน Y) = Efficient Frontier</li>
+  </ol>
+
+  <h3>2.7 Beta, CAPM และการวิเคราะห์ถดถอย</h3>
+  <div class="box"><b>CAPM:</b> E(R<sub>i</sub>) = R<sub>f</sub> + β<sub>i</sub>[E(R<sub>m</sub>) − R<sub>f</sub>]<br>
+  <b>β<sub>i</sub></b> = Cov(R<sub>i</sub>,R<sub>m</sub>) / Var(R<sub>m</sub>) ⇒ Excel: <span class="f">=SLOPE(ผลตอบแทนหุ้น, ผลตอบแทนSET)</span> หรือ <span class="f">=COVARIANCE.S(Ri,Rm)/VAR.S(Rm)</span><br>
+  Alpha (Jensen) = ค่าจุดตัด <span class="f">=INTERCEPT(...)</span> · ความเหมาะสมของสมการ <span class="f">=RSQ(...)</span></div>
+  <p><b>Regression แบบเต็ม:</b> Data › Data Analysis › Regression (เปิด Analysis ToolPak) — อ่านค่า Coefficients, t-stat, p-value (&lt; 0.05 = มีนัยสำคัญ), R² และ Standard Error · ใช้ <span class="f">=LINEST()</span> ได้เช่นกัน</p>
+  <div class="ex"><b class="t">ตัวอย่าง 2.3</b> R<sub>f</sub> = 2.5%, E(R<sub>m</sub>) = 8%, β = 1.2 ⇒ E(R) = 2.5% + 1.2(5.5%) = <b>9.1%</b> (ใช้เป็นอัตราคิดลดของผู้ถือหุ้น k<sub>e</sub>)</div>
+
+  <h3>2.8 การประเมินมูลค่าพันธบัตรและหุ้น</h3>
+  <h4>พันธบัตร</h4>
+  <p>ราคา = PV ดอกเบี้ย + PV เงินต้น ⇒ <span class="f">=PV(ytm/m, n*m, -coupon/m, -face)</span><br>
+  ฟังก์ชันวันที่จริง: <span class="f">=PRICE(settlement, maturity, rate, yld, 100, frequency)</span> · <span class="f">=YIELD(...)</span> · <span class="f">=DURATION(...)</span> · <span class="f">=MDURATION(...)</span></p>
+  <div class="ex"><b class="t">ตัวอย่าง 2.4</b> พันธบัตรหน้าตั๋ว 1,000 บาท คูปอง 4% จ่ายปีละครั้ง อายุ 5 ปี YTM 3%<br>
+  <span class="f">=PV(3%,5,-40,-1000)</span> = <b>1,045.80 บาท</b> (ราคาสูงกว่าพาร์ เพราะคูปอง &gt; YTM)</div>
+  <h4>หุ้นสามัญ</h4>
+  <ul>
+    <li><b>Gordon Growth Model:</b> P<sub>0</sub> = D<sub>1</sub> / (k<sub>e</sub> − g) — เช่น D<sub>0</sub> = 2 บาท g = 4% k<sub>e</sub> = 9.1% ⇒ P<sub>0</sub> = 2.08/0.051 = <b>40.78 บาท</b></li>
+    <li><b>DCF (FCFF):</b> พยากรณ์ FCFF 5 ปี + Terminal Value = FCFF<sub>6</sub>/(WACC − g) คิดลดด้วย WACC ⇒ Enterprise Value − หนี้สุทธิ = Equity Value ÷ จำนวนหุ้น</li>
+    <li><b>Relative Valuation:</b> P/E, P/BV, EV/EBITDA เทียบกับบริษัทในอุตสาหกรรมเดียวกัน</li>
+  </ul>
+  <p><b>WACC</b> = (E/V)k<sub>e</sub> + (D/V)k<sub>d</sub>(1 − t)</p>
+
+  <h3>2.9 การวิเคราะห์ความไว สถานการณ์ และ Monte Carlo</h3>
+  <table>
+    <tr><th>เครื่องมือ</th><th>วิธีใช้</th><th>ใช้ตอบคำถาม</th></tr>
+    <tr><td>Goal Seek</td><td>Data › What-If › Goal Seek</td><td>ยอดขายเท่าไรให้ NPV = 0 (Break-even)</td></tr>
+    <tr><td>Data Table 1 ตัวแปร</td><td>ตั้งค่าตัวแปรในคอลัมน์ ผลลัพธ์อ้างอิงที่หัวตาราง</td><td>NPV เปลี่ยนอย่างไรเมื่อต้นทุนเงินทุน 6–14%</td></tr>
+    <tr><td>Data Table 2 ตัวแปร</td><td>Row input + Column input</td><td>NPV ภายใต้ราคาขาย × ต้นทุน</td></tr>
+    <tr><td>Scenario Manager</td><td>กำหนด Best / Base / Worst</td><td>สรุปผลเป็นรายงาน</td></tr>
+    <tr><td>Monte Carlo</td><td><span class="f">=NORM.INV(RAND(),μ,σ)</span> สุ่มหลายพันครั้ง</td><td>การแจกแจงของ NPV, ความน่าจะเป็นที่ NPV &lt; 0, Value at Risk</td></tr>
+  </table>
+  <div class="box"><b>Value at Risk (VaR) แบบ Parametric:</b> VaR<sub>95%</sub> = มูลค่าพอร์ต × (μ − 1.645σ) — ใน Excel <span class="f">=NORM.INV(5%,μ,σ)*มูลค่าพอร์ต</span><br>
+  แบบ Historical: <span class="f">=PERCENTILE.INC(ผลตอบแทนย้อนหลัง,5%)</span></div>
+
+  <h3>2.10 เครื่องมือเสริม: VBA และ Python</h3>
+  <p><b>VBA (Macro)</b> — สร้างฟังก์ชันเองใน Excel (Alt+F11 › Insert › Module) บันทึกเป็น .xlsm</p>
+  <pre>Function CAPM(rf As Double, beta As Double, rm As Double) As Double
+    CAPM = rf + beta * (rm - rf)
+End Function
+' ใช้ในชีต: =CAPM(2.5%, 1.2, 8%)</pre>
+  <p><b>Python</b> (Jupyter / Google Colab) — เหมาะกับข้อมูลจำนวนมาก</p>
+  <pre>import yfinance as yf, numpy as np
+px = yf.download(["PTT.BK","CPALL.BK","^SET.BK"], start="2021-01-01")["Close"]
+ret = px.pct_change().dropna()
+beta = ret.cov().loc["PTT.BK","^SET.BK"] / ret["^SET.BK"].var()
+print("Annual mean:", ret.mean()*252)
+print("Annual vol :", ret.std()*np.sqrt(252))
+print("Beta PTT   :", round(beta, 2))</pre>
+
+  <h3>2.11 แบบฝึกหัด — คอมพิวเตอร์ประยุกต์ฯ</h3>
+  <ol>
+    <li>กู้ซื้อรถ 600,000 บาท ดอกเบี้ย 4.5%/ปี ผ่อน 60 เดือน จงเขียนสูตรหาค่างวด<br><span class="ans">เฉลย: =PMT(4.5%/12,60,-600000) ≈ 11,185.81 บาท/เดือน</span></li>
+    <li>โครงการลงทุน 500,000 ได้กระแสเงินสด 200,000 เท่ากันทุกปี 3 ปี ต้นทุนเงินทุน 8% NPV เท่าใด<br><span class="ans">เฉลย: =NPV(8%,200000,200000,200000)-500000 ≈ 15,419.40 บาท ⇒ ยอมรับ</span></li>
+    <li>ทำไม =NPV(10%,B2:B6) โดยที่ B2 คือเงินลงทุนปีที่ 0 จึงให้คำตอบผิด<br><span class="ans">เฉลย: ฟังก์ชันคิดลด B2 ไป 1 งวด ทั้งที่เงินลงทุนเกิด ณ ปัจจุบัน ต้องใช้ =NPV(10%,B3:B6)+B2</span></li>
+    <li>หุ้น X σ = 25% หุ้น Y σ = 15% ρ = −0.2 ลงทุนอย่างละ 50% จงหา σ<sub>p</sub><br><span class="ans">เฉลย: σp² = 0.25(0.0625)+0.25(0.0225)+2(0.25)(−0.2)(0.25)(0.15) = 0.015625+0.005625−0.00375 = 0.0175 ⇒ σp ≈ 13.23%</span></li>
+    <li>ใช้ฟังก์ชันใดหา Beta จากผลตอบแทนรายเดือนของหุ้นและตลาด<br><span class="ans">เฉลย: =SLOPE(ผลตอบแทนหุ้น, ผลตอบแทนตลาด)</span></li>
+    <li>พันธบัตร 1,000 บาท คูปอง 5% จ่ายปีละ 2 ครั้ง อายุ 3 ปี YTM 6% ราคาเท่าใด<br><span class="ans">เฉลย: =PV(6%/2,6,-25,-1000) ≈ 972.91 บาท</span></li>
+  </ol>
+</section>
+
+<!-- =================================================================== -->
+<!-- ================= COURSE 3: SEMINAR ================================ -->
+<!-- =================================================================== -->
+<section class="chapter">
+  <h2>วิชาที่ 3 · สัมมนา (Seminar) — 03759497</h2>
+  <div class="box"><b>เป้าหมายการเรียน:</b> ค้นคว้าประเด็นทางการเงินที่ทันสมัย สังเคราะห์งานวิจัยและข้อมูลจริง เขียนรายงานเชิงวิชาการ นำเสนอ และอภิปรายโต้ตอบอย่างมีเหตุผล<br>
+  <span class="small">ห้อง "Contact Teacher" = ไม่มีห้องเรียนประจำ ต้องติดต่อนัดหมายกับอาจารย์ผู้สอนเอง — ควรติดต่อตั้งแต่สัปดาห์แรก</span></div>
+
+  <h3>3.1 สิ่งที่วิชานี้ประเมิน</h3>
+  <table>
+    <tr><th>องค์ประกอบ</th><th>สิ่งที่อาจารย์มองหา</th></tr>
+    <tr><td>หัวข้อ</td><td>ทันสมัย มีประเด็นปัญหาชัด ขอบเขตทำได้จริง</td></tr>
+    <tr><td>การค้นคว้า</td><td>อ้างอิงงานวิจัย/ข้อมูลน่าเชื่อถือ ไม่ใช่บทความบล็อก</td></tr>
+    <tr><td>การวิเคราะห์</td><td>เปรียบเทียบ เชื่อมทฤษฎีกับข้อมูลจริง มีความเห็นของตนเองที่มีเหตุผลรองรับ</td></tr>
+    <tr><td>รายงาน</td><td>โครงสร้างดี ภาษาวิชาการ อ้างอิงถูกรูปแบบ</td></tr>
+    <tr><td>การนำเสนอ</td><td>ตรงเวลา สื่อชัด ตอบคำถามได้</td></tr>
+    <tr><td>การมีส่วนร่วม</td><td>ซักถาม/ให้ข้อเสนอแนะต่อการนำเสนอของเพื่อน</td></tr>
+  </table>
+
+  <h3>3.2 การเลือกหัวข้อ — สูตร "ปัญหา + บริบท + มุมมอง"</h3>
+  <ol>
+    <li><b>เริ่มจากความสนใจ</b>: ธนาคาร การลงทุน FinTech การเงินส่วนบุคคล การเงินบริษัท ESG</li>
+    <li><b>หาประเด็นที่มีข้อถกเถียง/เปลี่ยนแปลง</b> เช่น กฎใหม่ของ ธปท. เทคโนโลยีใหม่ เหตุการณ์ตลาด</li>
+    <li><b>ตีกรอบให้แคบ</b>: "ผลกระทบของ Virtual Bank ต่อธนาคารพาณิชย์ไทย" แคบกว่า "Digital Banking"</li>
+    <li><b>ตรวจว่ามีข้อมูลพอ</b>: งานวิจัย รายงาน ธปท. งบการเงิน สถิติ</li>
+    <li><b>เขียนคำถามหลัก 1 ข้อ</b> + คำถามย่อย 2–3 ข้อ แล้วเสนออาจารย์</li>
+  </ol>
+
+  <h3>3.3 การค้นคว้าและทบทวนวรรณกรรม</h3>
+  <table>
+    <tr><th>แหล่ง</th><th>ใช้หาอะไร</th></tr>
+    <tr><td>Google Scholar, SSRN, ScienceDirect, JSTOR (ผ่านห้องสมุด มก.)</td><td>งานวิจัยต่างประเทศ</td></tr>
+    <tr><td>ThaiJO (tci-thaijo.org), ฐานข้อมูลวิทยานิพนธ์ ThaiLIS / KU-Repository</td><td>งานวิจัยไทย</td></tr>
+    <tr><td>ธปท. (bot.or.th) — บทความ PIER, รายงานเสถียรภาพระบบการเงิน</td><td>ข้อมูลระบบธนาคาร เศรษฐกิจ</td></tr>
+    <tr><td>ตลท. / ก.ล.ต. / SETSMART / แบบ 56-1 One Report</td><td>ข้อมูลบริษัทจดทะเบียน</td></tr>
+    <tr><td>BIS, IMF, World Bank</td><td>มาตรฐานสากล ข้อมูลเปรียบเทียบประเทศ</td></tr>
+  </table>
+  <div class="box"><b>วิธีอ่านงานวิจัยให้เร็ว:</b> Abstract → บทนำ (คำถามวิจัย) → ข้อสรุป → ตาราง/กราฟผลหลัก → ค่อยอ่านวิธีวิจัยละเอียด<br>
+  จดลงตาราง <b>Literature Matrix</b>: ผู้แต่ง/ปี · คำถาม · ข้อมูล/ตัวอย่าง · วิธี · ผลการศึกษา · ข้อจำกัด — แล้วเขียนทบทวนวรรณกรรมแบบ <b>สังเคราะห์ตามประเด็น</b> (ไม่ใช่สรุปทีละเรื่อง)</div>
+
+  <h3>3.4 โครงสร้างรายงานสัมมนา (ประมาณ 15–25 หน้า)</h3>
+  <ol>
+    <li><b>บทนำ</b>: ความเป็นมาและความสำคัญ คำถาม/วัตถุประสงค์ ขอบเขต ประโยชน์ที่คาดว่าจะได้รับ</li>
+    <li><b>แนวคิด ทฤษฎี และงานวิจัยที่เกี่ยวข้อง</b></li>
+    <li><b>ข้อมูลและสถานการณ์ปัจจุบัน</b>: สถิติ กรณีศึกษา เปรียบเทียบไทย–ต่างประเทศ</li>
+    <li><b>บทวิเคราะห์และอภิปราย</b>: ตอบคำถามหลัก ข้อดี–ข้อเสีย ผลกระทบต่อผู้มีส่วนได้เสีย</li>
+    <li><b>สรุปและข้อเสนอแนะ</b>: เชิงนโยบาย เชิงธุรกิจ และสำหรับการศึกษาครั้งต่อไป</li>
+    <li><b>บรรณานุกรม</b> (APA 7th) และภาคผนวก</li>
+  </ol>
+
+  <h3>3.5 การนำเสนอและการตอบคำถาม</h3>
+  <ul>
+    <li><b>15–20 นาที ≈ 12–15 สไลด์</b>: ชื่อเรื่อง → ทำไมสำคัญ → คำถาม → แนวคิด/งานวิจัยเด่น 2–3 ชิ้น → ข้อมูล/กราฟ → วิเคราะห์ → ข้อสรุป → ข้อเสนอแนะ → Q&amp;A</li>
+    <li>หนึ่งสไลด์ หนึ่งประเด็น · ใช้กราฟแทนตาราง · หัวสไลด์เป็นประโยคข้อสรุป เช่น "NIM ของธนาคารไทยลดลงต่อเนื่องหลังปี 2563"</li>
+    <li>ซ้อมจับเวลาอย่างน้อย 2 รอบ เตรียมสไลด์สำรอง (Backup) สำหรับคำถามที่คาดว่าจะถูกถาม</li>
+    <li><b>ตอบคำถามแบบ ฟัง → ทวนคำถาม → ตอบสั้น + หลักฐาน</b> · ถ้าไม่รู้ให้ยอมรับ และบอกว่าจะไปค้นเพิ่มเติม</li>
+    <li>เมื่อเป็นผู้ฟัง: ถามคำถามเชิงสร้างสรรค์ เช่น "ข้อสรุปนี้ยังใช้ได้ไหมถ้าอัตราดอกเบี้ยเป็นขาขึ้น"</li>
+  </ul>
+
+  <h3>3.6 ตัวอย่างหัวข้อสัมมนา (การเงิน)</h3>
+  <table>
+    <tr><th>หมวด</th><th>ตัวอย่างหัวข้อ</th></tr>
+    <tr><td>ธนาคาร</td><td>Virtual Bank กับการแข่งขันในระบบธนาคารไทย · ผลของหนี้ครัวเรือนต่อคุณภาพสินเชื่อ · ผลกระทบของอัตราดอกเบี้ยนโยบายต่อ NIM</td></tr>
+    <tr><td>FinTech</td><td>Open Banking และการใช้ Alternative Data ในการปล่อยสินเชื่อ · ความเสี่ยงของ Buy Now Pay Later · Digital Asset ภายใต้กฎ ก.ล.ต.</td></tr>
+    <tr><td>การลงทุน</td><td>ประสิทธิภาพกองทุน Thai ESG · หุ้น Factor Investing ในตลาดไทย · ผลของ Robo-advisor ต่อนักลงทุนรายย่อย</td></tr>
+    <tr><td>การเงินบริษัท</td><td>โครงสร้างเงินทุนกับมูลค่ากิจการ · การจ่ายเงินปันผลของบริษัทใน SET50</td></tr>
+    <tr><td>ESG / ความยั่งยืน</td><td>Green Bond / Sustainability-linked Bond ในไทย · Climate Risk กับธนาคาร</td></tr>
+  </table>
+</section>
+
+<!-- =================================================================== -->
+<!-- ================= COURSE 4: SPECIAL PROBLEMS ======================= -->
+<!-- =================================================================== -->
+<section class="chapter">
+  <h2>วิชาที่ 4 · ปัญหาพิเศษ (Special Problems) — 03759498</h2>
+  <div class="box"><b>ลักษณะวิชา:</b> โครงงานวิจัยขนาดเล็กที่นิสิตทำเองภายใต้การดูแลของอาจารย์ที่ปรึกษา (ห้อง Contact Teacher) ผลงานคือ <b>รูปเล่มรายงานปัญหาพิเศษ</b> และการสอบนำเสนอ — ต่างจากสัมมนาตรงที่ต้อง <b>เก็บ/วิเคราะห์ข้อมูลเชิงประจักษ์เอง</b> ไม่ใช่สังเคราะห์งานผู้อื่นเท่านั้น<br>
+  <span class="small">แนะนำ: ใช้หัวข้อเดียวกับหรือต่อยอดจากวิชาสัมมนา จะประหยัดเวลาเรื่องทบทวนวรรณกรรมได้มาก (ปรึกษาอาจารย์ว่าอนุญาตหรือไม่)</span></div>
+
+  <h3>4.1 ขั้นตอนการทำงาน</h3>
+  <table>
+    <tr><th>ขั้น</th><th>งาน</th><th>ผลลัพธ์</th></tr>
+    <tr><td>1</td><td>เลือกหัวข้อ + ตั้งคำถามวิจัยที่วัดผลได้</td><td>ชื่อเรื่อง วัตถุประสงค์ สมมติฐาน</td></tr>
+    <tr><td>2</td><td>ทบทวนวรรณกรรม หาตัวแปรและวิธีที่งานก่อนใช้</td><td>กรอบแนวคิด (Conceptual Framework)</td></tr>
+    <tr><td>3</td><td>ออกแบบวิธีวิจัย: ข้อมูล ตัวอย่าง ช่วงเวลา สถิติ</td><td>เค้าโครง (Proposal) — สอบ/เสนออาจารย์</td></tr>
+    <tr><td>4</td><td>เก็บและทำความสะอาดข้อมูล</td><td>ไฟล์ข้อมูลพร้อมวิเคราะห์</td></tr>
+    <tr><td>5</td><td>วิเคราะห์ด้วย Excel / SPSS / Stata / EViews / Python</td><td>ตารางผล กราฟ</td></tr>
+    <tr><td>6</td><td>แปลผล อภิปรายเทียบกับงานวิจัยเดิม</td><td>บทที่ 4–5</td></tr>
+    <tr><td>7</td><td>เขียนรูปเล่ม แก้ไขตามอาจารย์ นำเสนอ</td><td>รูปเล่มสมบูรณ์</td></tr>
+  </table>
+
+  <h3>4.2 ระเบียบวิธีวิจัยทางการเงินที่ใช้บ่อย</h3>
+  <table>
+    <tr><th>วิธี</th><th>ใช้ตอบคำถามแบบ</th><th>ตัวอย่างหัวข้อ</th></tr>
+    <tr><td>สถิติเชิงพรรณนา + t-test / ANOVA</td><td>สองกลุ่มต่างกันไหม</td><td>ผลตอบแทนกองทุน ESG ต่างจากกองทุนทั่วไปหรือไม่</td></tr>
+    <tr><td>Multiple Regression (OLS)</td><td>ปัจจัยใดมีผลต่อ Y</td><td>ปัจจัยที่มีผลต่อ ROA ของธนาคารพาณิชย์ไทย</td></tr>
+    <tr><td>Panel Data (Fixed / Random Effects)</td><td>หลายบริษัท × หลายปี</td><td>โครงสร้างเงินทุนกับ Tobin's Q ของบริษัทใน SET</td></tr>
+    <tr><td>Time Series (ADF, ARIMA, VAR, GARCH)</td><td>พยากรณ์/ความผันผวน</td><td>ความผันผวนของดัชนี SET กับอัตราแลกเปลี่ยน</td></tr>
+    <tr><td>Event Study</td><td>ตลาดตอบสนองต่อเหตุการณ์ไหม</td><td>ผลประกาศจ่ายปันผล/ปรับดอกเบี้ยนโยบายต่อราคาหุ้นธนาคาร (Abnormal Return)</td></tr>
+    <tr><td>แบบสอบถาม + Logistic Regression / SEM</td><td>พฤติกรรม/การตัดสินใจ</td><td>ปัจจัยที่มีผลต่อการใช้ Mobile Banking ของคนวัยทำงาน</td></tr>
+    <tr><td>Portfolio Backtest</td><td>กลยุทธ์ชนะตลาดไหม</td><td>กลยุทธ์ Low Volatility ใน SET100</td></tr>
+  </table>
+  <div class="ex"><b class="t">ตัวอย่างแบบจำลอง</b> "ปัจจัยที่มีผลต่อความสามารถในการทำกำไรของธนาคารพาณิชย์ไทย 2558–2567"<br>
+  <span class="f">ROA<sub>it</sub> = β0 + β1 CAR<sub>it</sub> + β2 NPL<sub>it</sub> + β3 CIR<sub>it</sub> + β4 SIZE<sub>it</sub> + β5 GDP<sub>t</sub> + ε<sub>it</sub></span><br>
+  ข้อมูล: งบการเงินรายปีของธนาคารพาณิชย์จดทะเบียน (One Report / SETSMART) + GDP จาก สศช. · วิธี: Panel Regression + Hausman Test<br>
+  สมมติฐาน: NPL (−), CIR (−), CAR (+/−), SIZE (+)</div>
+  <div class="warn"><b>ตรวจสอบก่อนแปลผล Regression:</b> Multicollinearity (VIF &lt; 10) · Heteroskedasticity (White/Breusch-Pagan → ใช้ Robust SE) · Autocorrelation (Durbin-Watson) · Stationarity สำหรับข้อมูลอนุกรมเวลา (ADF Test)</div>
+
+  <h3>4.3 โครงสร้างรูปเล่ม 5 บท</h3>
+  <table>
+    <tr><th>ส่วน</th><th>เนื้อหา</th></tr>
+    <tr><td>ส่วนหน้า</td><td>ปก · บทคัดย่อ (ไทย/อังกฤษ) · กิตติกรรมประกาศ · สารบัญ/สารบัญตาราง/ภาพ</td></tr>
+    <tr><td>บทที่ 1 บทนำ</td><td>ที่มาและความสำคัญ · วัตถุประสงค์ · สมมติฐาน · ขอบเขต · ประโยชน์ · นิยามศัพท์</td></tr>
+    <tr><td>บทที่ 2 แนวคิด ทฤษฎี และงานวิจัยที่เกี่ยวข้อง</td><td>ทฤษฎี · งานวิจัยในและต่างประเทศ · กรอบแนวคิด</td></tr>
+    <tr><td>บทที่ 3 วิธีดำเนินการวิจัย</td><td>ประชากร/ตัวอย่าง · แหล่งข้อมูล · ตัวแปรและการวัด · แบบจำลอง · สถิติที่ใช้</td></tr>
+    <tr><td>บทที่ 4 ผลการวิจัย</td><td>สถิติพรรณนา · ผลการทดสอบ · ตารางผลพร้อมแปลความ</td></tr>
+    <tr><td>บทที่ 5 สรุป อภิปราย และข้อเสนอแนะ</td><td>สรุปตามวัตถุประสงค์ · อภิปรายเทียบงานวิจัยเดิม · ข้อจำกัด · ข้อเสนอแนะ</td></tr>
+    <tr><td>ส่วนท้าย</td><td>บรรณานุกรม · ภาคผนวก (ข้อมูล แบบสอบถาม ผลจากโปรแกรม) · ประวัติผู้วิจัย</td></tr>
+  </table>
+  <p><b>บทคัดย่อที่ดี (150–250 คำ):</b> วัตถุประสงค์ → ข้อมูลและวิธี → ผลหลัก (มีตัวเลข) → ข้อเสนอแนะ ในย่อหน้าเดียว</p>
+
+  <h3>4.4 การอ้างอิงและจริยธรรม</h3>
+  <ul>
+    <li>ใช้รูปแบบ <b>APA 7th</b> (หรือตามคู่มือของคณะ) อย่างสม่ำเสมอ — ช่วยด้วย Zotero / Mendeley / Word References</li>
+    <li>ตัวอย่างในเนื้อหา: (Berger &amp; Bouwman, 2013) · บรรณานุกรม: Berger, A. N., &amp; Bouwman, C. H. S. (2013). How does capital affect bank performance during financial crises? <i>Journal of Financial Economics, 109</i>(1), 146–176.</li>
+    <li>ตรวจการคัดลอกผลงาน (มหาวิทยาลัยมักใช้ อักขราวิสุทธิ์ / Turnitin) — เขียนด้วยภาษาตนเองเสมอ (Paraphrase) และอ้างที่มา</li>
+    <li>ถ้าใช้ AI ช่วย: ใช้หาไอเดีย/ตรวจภาษา ตรวจสอบข้อเท็จจริงทุกข้อ และเปิดเผยการใช้ตามที่อาจารย์กำหนด</li>
+    <li>งานที่ใช้แบบสอบถามคน อาจต้องขอรับรองจริยธรรมการวิจัยในมนุษย์ — สอบถามอาจารย์ที่ปรึกษา</li>
+  </ul>
+
+  <h3>4.5 แผนเวลา 16 สัปดาห์ (ตัวอย่าง)</h3>
+  <table>
+    <tr><th>สัปดาห์</th><th>สัมมนา (03759497)</th><th>ปัญหาพิเศษ (03759498)</th></tr>
+    <tr><td>1–2</td><td>นัดอาจารย์ เลือกหัวข้อ</td><td>นัดอาจารย์ที่ปรึกษา ร่างคำถามวิจัย</td></tr>
+    <tr><td>3–5</td><td>ค้นคว้า ทำ Literature Matrix</td><td>ทบทวนวรรณกรรม กำหนดตัวแปร</td></tr>
+    <tr><td>6–7</td><td>เขียนร่างบทที่ 1–2</td><td>เสนอเค้าโครง (Proposal)</td></tr>
+    <tr><td>8–10</td><td>วิเคราะห์ข้อมูล/กรณีศึกษา</td><td>เก็บและทำความสะอาดข้อมูล</td></tr>
+    <tr><td>11–12</td><td>เขียนบทวิเคราะห์และสรุป</td><td>วิเคราะห์ข้อมูล เขียนบทที่ 4</td></tr>
+    <tr><td>13–14</td><td>ทำสไลด์ ซ้อม นำเสนอ</td><td>เขียนบทที่ 5 บทคัดย่อ ส่งร่างให้อาจารย์</td></tr>
+    <tr><td>15–16</td><td>ส่งรายงานฉบับสมบูรณ์</td><td>สอบนำเสนอ แก้ไข ส่งรูปเล่ม</td></tr>
+  </table>
+
+  <h3>4.6 เช็กลิสต์ก่อนส่งงาน</h3>
+  <ul>
+    <li>☐ ชื่อเรื่อง วัตถุประสงค์ สมมติฐาน และข้อสรุปสอดคล้องกันทุกบท</li>
+    <li>☐ ทุกตาราง/ภาพมีเลขกำกับ ชื่อ และแหล่งที่มา</li>
+    <li>☐ ทุกการอ้างอิงในเนื้อหาปรากฏในบรรณานุกรม (และกลับกัน)</li>
+    <li>☐ ตัวเลขในบทคัดย่อตรงกับบทที่ 4</li>
+    <li>☐ ตรวจการคัดลอกผลงานแล้ว และอยู่ในเกณฑ์ที่กำหนด</li>
+    <li>☐ จัดรูปแบบตามคู่มือคณะ (ฟอนต์ ระยะขอบ เลขหน้า)</li>
+    <li>☐ สำรองไฟล์ข้อมูลและโค้ดวิเคราะห์ (Google Drive / OneDrive)</li>
+  </ul>
+
+  <div class="box" style="margin-top:16px"><b>สรุปเชื่อมโยงทั้ง 4 วิชา:</b> ความรู้ <b>การธนาคารพาณิชย์</b> (ROA, NIM, NPL, CAR) เป็นตัวแปรที่ดีสำหรับงาน <b>ปัญหาพิเศษ</b> · ทักษะจาก <b>คอมพิวเตอร์ประยุกต์ฯ</b> (Regression, Excel, Python) คือเครื่องมือวิเคราะห์ · และ <b>สัมมนา</b> ฝึกการเขียนและนำเสนอผลงานนั้น — เลือกหัวข้อเดียวที่ใช้ได้ทั้งสามทางจะช่วยประหยัดเวลาที่สุด</div>
+</section>
+
+</body>
+</html>
