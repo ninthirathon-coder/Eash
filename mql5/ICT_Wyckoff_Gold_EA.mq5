@@ -18,7 +18,7 @@
 //|  ที่แปะ EA (แนะนำ M5 ตามเอกสาร หรือ M1/M3 ถ้าต้องการ SL สั้น)         |
 //|  ฝั่ง Sell ใช้ราคากลับเครื่องหมาย (p' = -p) จึงเขียนโค้ดฝั่ง Buy ชุดเดียว |
 //+------------------------------------------------------------------+
-#property version   "1.11"
+#property version   "1.20"
 #property description "Order Block H1 + ยืนยัน 2 ขั้น (ค่าเริ่มต้น) / ICT 2022 Model + Wyckoff (XAUUSD). ไม่ใช่คำแนะนำการลงทุน"
 
 #include <Trade/Trade.mqh>
@@ -27,6 +27,19 @@ enum ENUM_FIB_SET
   {
    FIB_SET_OTE     = 0, // ชุด OTE: 0, 0.21, 0.295, 0.38, 0.5, 0.62, 0.705, 0.79, 1, -0.27, 1.27
    FIB_SET_QUARTER = 1  // ชุด Quarter: 0, 0.25, 0.5, 0.75, 1 พร้อมขอบ Buy/Sell ห่าง 0.059
+  };
+
+enum ENUM_TIME_MODE
+  {
+   TIME_AUTO   = 0, // อัตโนมัติ: จาก GMT ของโบรก + การเปลี่ยนเวลา
+   TIME_MANUAL = 1  // กำหนดเอง: InpServerMinusNY คงที่
+  };
+
+enum ENUM_SRV_DST
+  {
+   SRV_DST_NONE = 0, // เซิร์ฟเวอร์ไม่เปลี่ยนเวลาตามฤดู
+   SRV_DST_EU   = 1, // เปลี่ยนตามยุโรป (GMT+2 หน้าหนาว / GMT+3 หน้าร้อน)
+   SRV_DST_US   = 2  // เปลี่ยนตามสหรัฐ (โบรกส่วนใหญ่ที่เป็น GMT+2/+3)
   };
 
 enum ENUM_STRATEGY
@@ -82,8 +95,22 @@ input bool   InpObHoldOvernight = true; // ถือข้ามวัน (ไ�
 input int    InpObMaxTradesDay = 5;     // จำนวนไม้สูงสุดต่อวัน
 input int    InpObMaxLossesDay = 3;     // แพ้ครบกี่ไม้แล้วหยุดวันนั้น
 
+input group "=== ป้องกันบัญชี ==="
+input double InpTotalDDPct    = 8.0;    // หยุดเทรดถาวรเมื่อ equity ต่ำกว่าทุนเริ่มต้นเกิน % นี้ (0 = ปิด)
+input double InpStartBalance  = 0;      // ทุนเริ่มต้นของบัญชี (0 = ใช้ balance ตอนเริ่ม EA ครั้งแรก)
+input double InpDailyDDPct    = 3.0;    // ขาดทุนรายวัน (นับ equity เทียบ balance ต้นวัน) ถึง % นี้ ปิดทุกไม้และหยุดวันนั้น (0 = ปิด)
+input bool   InpCloseFriday   = true;   // ปิดทุกไม้และยกเลิกออเดอร์ก่อนตลาดปิดวันศุกร์
+input int    InpFridayCloseNY = 1600;   // เวลาปิดวันศุกร์ (นิวยอร์ก HHMM)
+input int    InpMaxHoldH      = 0;      // ถือได้นานสุดกี่ชั่วโมง (0 = ไม่จำกัด)
+input bool   InpSkipFomc      = true;   // งดเทรดวันประชุม FOMC (รายการวันในโค้ด 2024-2026, ตรวจก่อนใช้)
+input string InpNewsTimes     = "";     // เวลาข่าวแรง (นิวยอร์ก) เช่น 2026.12.10 08:30;2027.01.13 08:30
+input int    InpNewsBlockMin  = 30;     // งดเข้าไม้ใหม่ก่อนและหลังเวลาข่าวกี่นาที
+
 input group "=== เวลา (ใส่เป็นเวลานิวยอร์ก HHMM) ==="
-input int    InpServerMinusNY = 7;      // เวลาเซิร์ฟเวอร์โบรกเกอร์ ลบ เวลานิวยอร์ก (ชม.) โบรก GMT+2/+3 = 7
+input ENUM_TIME_MODE InpTimeMode = TIME_AUTO; // วิธีหาเวลานิวยอร์ก
+input int    InpServerGMT     = 2;      // อัตโนมัติ: GMT offset ของเซิร์ฟเวอร์ช่วงหน้าหนาว (ชม.)
+input ENUM_SRV_DST InpServerDST = SRV_DST_US; // อัตโนมัติ: เซิร์ฟเวอร์เปลี่ยนเวลาตามฤดูแบบไหน
+input int    InpServerMinusNY = 7;      // กำหนดเอง: เวลาเซิร์ฟเวอร์ ลบ เวลานิวยอร์ก (ชม.)
 input int    InpAsiaStart     = 2000;   // Asia เริ่ม
 input int    InpAsiaEnd       = 0;      // Asia จบ
 input int    InpLondonStart   = 200;    // London Kill Zone เริ่ม
@@ -213,6 +240,11 @@ struct SObSetup
    int               nst;
   };
 
+double   g_startBal    = 0;     // ทุนเริ่มต้นที่ใช้คิดเพดานขาดทุนรวม
+double   g_dayStartBal = 0;     // balance ต้นวันเทรด
+bool     g_dayBlocked  = false; // ถึงเพดานรายวันแล้ว
+bool     g_halted      = false; // ถึงเพดานขาดทุนรวมแล้ว: หยุดถาวร
+
 SObZone  g_ob[];
 SObSetup g_os[2];
 double   g_obUsed[];
@@ -284,7 +316,68 @@ int      g_hi      = 0;       // จำนวนแท่ง H1 ที่ปิ�
 //+------------------------------------------------------------------+
 //| เวลา                                                              |
 //+------------------------------------------------------------------+
-datetime T7(const datetime server) { return (datetime)(server + (7 - InpServerMinusNY) * 3600); }   // เวลานิวยอร์ก + 7 ชม.
+//--- เวลานิวยอร์กจากเวลาเซิร์ฟเวอร์ (ปรับการเปลี่ยนเวลาตามฤดูให้อัตโนมัติ) -------
+datetime MonthStart(const int year, const int mon)
+  {
+   MqlDateTime d;
+   ZeroMemory(d);
+   d.year = year;
+   d.mon  = mon;
+   d.day  = 1;
+   return StructToTime(d);
+  }
+
+datetime NthSunday(const int year, const int mon, const int nth)   // nth = 1, 2, ... ; -1 = อาทิตย์สุดท้าย
+  {
+   MqlDateTime d;
+   if(nth > 0)
+     {
+      datetime t = MonthStart(year, mon);
+      TimeToStruct(t, d);
+      return (datetime)(t + ((7 - d.day_of_week) % 7) * 86400 + (nth - 1) * 7 * 86400);
+     }
+   datetime last = (datetime)((mon == 12 ? MonthStart(year + 1, 1) : MonthStart(year, mon + 1)) - 86400);
+   TimeToStruct(last, d);
+   return (datetime)(last - d.day_of_week * 86400);
+  }
+
+bool IsUSDST(const datetime utc)    // อาทิตย์ที่ 2 ของ มี.ค. 07:00 UTC ถึงอาทิตย์แรกของ พ.ย. 06:00 UTC
+  {
+   MqlDateTime d;
+   TimeToStruct(utc, d);
+   return utc >= NthSunday(d.year, 3, 2) + 7 * 3600 && utc < NthSunday(d.year, 11, 1) + 6 * 3600;
+  }
+
+bool IsEUDST(const datetime utc)    // อาทิตย์สุดท้ายของ มี.ค. 01:00 UTC ถึงอาทิตย์สุดท้ายของ ต.ค. 01:00 UTC
+  {
+   MqlDateTime d;
+   TimeToStruct(utc, d);
+   return utc >= NthSunday(d.year, 3, -1) + 3600 && utc < NthSunday(d.year, 10, -1) + 3600;
+  }
+
+// วินาทีที่เวลาเซิร์ฟเวอร์นำเวลานิวยอร์ก (เก็บผลไว้ต่อชั่วโมงเพื่อความเร็ว)
+long ServerMinusNYSec(const datetime srv)
+  {
+   if(InpTimeMode == TIME_MANUAL)
+      return (long)InpServerMinusNY * 3600;
+   static long cacheHour = -1;
+   static long cacheVal  = 0;
+   long hr = (long)srv / 3600;
+   if(hr == cacheHour)
+      return cacheVal;
+   datetime utc = (datetime)(srv - (long)InpServerGMT * 3600);
+   if(InpServerDST == SRV_DST_EU && IsEUDST(utc))
+      utc -= 3600;
+   if(InpServerDST == SRV_DST_US && IsUSDST(utc))
+      utc -= 3600;
+   datetime ny = (datetime)(utc - 5 * 3600 + (IsUSDST(utc) ? 3600 : 0));
+   cacheHour = hr;
+   cacheVal  = (long)srv - (long)ny;
+   return cacheVal;
+  }
+
+datetime NYTime(const datetime server) { return (datetime)(server - ServerMinusNYSec(server)); }
+datetime T7(const datetime server) { return (datetime)(NYTime(server) + 7 * 3600); }   // เวลานิวยอร์ก + 7 ชม.
 int      ModOf(const datetime t7)  { return (int)((t7 % 86400) / 60); }
 datetime DayOf(const datetime t7)  { return (datetime)(t7 - t7 % 86400); }
 int      NyMod(const int hhmm)     { return ((hhmm / 100) * 60 + hhmm % 100 + 420) % 1440; }
@@ -328,6 +421,26 @@ int OnInit()
    g_os[1].d = -1;
    g_os[0].active = false;
    g_os[1].active = false;
+   string gv = "ICTWY_START_" + IntegerToString(InpMagic);
+   bool tester = (bool)MQLInfoInteger(MQL_TESTER);
+   if(InpStartBalance > 0)
+      g_startBal = InpStartBalance;
+   else if(tester)
+      g_startBal = AccountInfoDouble(ACCOUNT_BALANCE);   // ใน Strategy Tester เริ่มใหม่ทุกรอบ
+   else if(GlobalVariableCheck(gv))
+      g_startBal = GlobalVariableGet(gv);
+   else
+     {
+      g_startBal = AccountInfoDouble(ACCOUNT_BALANCE);
+      GlobalVariableSet(gv, g_startBal);
+     }
+   g_halted = !tester && GlobalVariableCheck("ICTWY_HALT_" + IntegerToString(InpMagic));
+   g_dayStartBal = AccountInfoDouble(ACCOUNT_BALANCE);
+   MqlDateTime ny;
+   TimeToStruct(NYTime(TimeCurrent()), ny);
+   PrintFormat("ICT_Wyckoff_Gold_EA: ทุนเริ่มต้น %.2f | เวลาเซิร์ฟเวอร์ %s = นิวยอร์ก %02d:%02d (ต่างกัน %d ชม.)%s",
+               g_startBal, TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES), ny.hour, ny.min,
+               (int)(ServerMinusNYSec(TimeCurrent()) / 3600), g_halted ? " | หยุดถาวรอยู่" : "");
    return INIT_SUCCEEDED;
   }
 
@@ -387,7 +500,7 @@ void DayCounters(int &trades, int &losses, double &dayPl)
    trades = 0;
    losses = 0;
    dayPl  = 0;
-   datetime from = (datetime)(g_day - (7 - InpServerMinusNY) * 3600);
+   datetime from = (datetime)(g_day - 7 * 3600 + ServerMinusNYSec(TimeCurrent()));
    if(!HistorySelect(from, TimeCurrent() + 3600))
       return;
    ulong  ids[];
@@ -426,9 +539,110 @@ void DayCounters(int &trades, int &losses, double &dayPl)
      }
   }
 
+//+------------------------------------------------------------------+
+//| ป้องกันบัญชี                                                       |
+//+------------------------------------------------------------------+
+// วันประชุม FOMC (ประกาศ 14:00 นิวยอร์ก) ตามตารางที่ Fed เผยแพร่ ตรวจกับปฏิทินจริงก่อนใช้
+const string FOMC_DATES = "2024.01.31;2024.03.20;2024.05.01;2024.06.12;2024.07.31;2024.09.18;2024.11.07;2024.12.18;"
+                          "2025.01.29;2025.03.19;2025.05.07;2025.06.18;2025.07.30;2025.09.17;2025.10.29;2025.12.10;"
+                          "2026.01.28;2026.03.18;2026.04.29;2026.06.17;2026.07.29;2026.09.16;2026.10.28;2026.12.09";
+
+void CloseAll()
+  {
+   for(int k = PositionsTotal() - 1; k >= 0; k--)
+     {
+      ulong t = PositionGetTicket(k);
+      if(t > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == InpMagic)
+         trade.PositionClose(t);
+     }
+   for(int k = OrdersTotal() - 1; k >= 0; k--)
+     {
+      ulong t = OrderGetTicket(k);
+      if(t > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == InpMagic)
+         trade.OrderDelete(t);
+     }
+   g_dir = 0;
+   g_waitPA = false;
+  }
+
+// หลังเวลาปิดวันศุกร์ (นิวยอร์ก) จนถึงสิ้นสัปดาห์
+bool FridayClosed()
+  {
+   if(!InpCloseFriday)
+      return false;
+   MqlDateTime ny;
+   TimeToStruct(NYTime(TimeCurrent()), ny);
+   return (ny.day_of_week == 5 && ny.hour * 100 + ny.min >= InpFridayCloseNY) || ny.day_of_week == 6;
+  }
+
+// อยู่ใกล้เวลาข่าวที่ระบุไว้ใน InpNewsTimes
+bool NearNews()
+  {
+   if(InpNewsTimes == "")
+      return false;
+   string parts[];
+   int n = StringSplit(InpNewsTimes, ';', parts);
+   datetime ny = NYTime(TimeCurrent());
+   for(int k = 0; k < n; k++)
+     {
+      StringTrimLeft(parts[k]);
+      StringTrimRight(parts[k]);
+      if(parts[k] == "")
+         continue;
+      datetime t = StringToTime(parts[k]);
+      if(t > 0 && MathAbs((long)ny - (long)t) <= (long)InpNewsBlockMin * 60)
+         return true;
+     }
+   return false;
+  }
+
+// เรียกทุก tick: คืน true เมื่อ EA หยุดถาวรแล้ว
+bool GuardOnTick()
+  {
+   if(g_halted)
+     {
+      if(FindPosition() > 0 || FindPending() > 0)
+         CloseAll();
+      return true;
+     }
+   double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(InpTotalDDPct > 0 && g_startBal > 0 && eq <= g_startBal * (1 - InpTotalDDPct / 100.0))
+     {
+      g_halted = true;
+      GlobalVariableSet("ICTWY_HALT_" + IntegerToString(InpMagic), 1);
+      CloseAll();
+      Print("ICT_Wyckoff_Gold_EA: equity ", DoubleToString(eq, 2), " ต่ำกว่าเพดานขาดทุนรวม ", DoubleToString(InpTotalDDPct, 1),
+            "% ของทุน ", DoubleToString(g_startBal, 2), " - หยุดเทรดถาวร (ลบ Global Variable ICTWY_HALT_", InpMagic, " เพื่อเริ่มใหม่)");
+      return true;
+     }
+   if(!g_dayBlocked && InpDailyDDPct > 0 && g_dayStartBal > 0 && eq <= g_dayStartBal * (1 - InpDailyDDPct / 100.0))
+     {
+      g_dayBlocked = true;
+      CloseAll();
+      Print("ICT_Wyckoff_Gold_EA: ขาดทุนวันนี้ถึง ", DoubleToString(InpDailyDDPct, 1), "% - ปิดทุกไม้และหยุดถึงวันเทรดถัดไป");
+     }
+   if(FridayClosed() && (FindPosition() > 0 || FindPending() > 0))
+     {
+      CloseAll();
+      Print("ICT_Wyckoff_Gold_EA: ปิดทุกไม้ก่อนตลาดปิดวันศุกร์");
+     }
+   if(InpMaxHoldH > 0)
+     {
+      ulong t = FindPosition();
+      if(t > 0 && PositionSelectByTicket(t) && TimeCurrent() - (datetime)PositionGetInteger(POSITION_TIME) >= (long)InpMaxHoldH * 3600)
+        {
+         trade.PositionClose(t);
+         Print("ICT_Wyckoff_Gold_EA: ถือครบ ", InpMaxHoldH, " ชั่วโมง ปิดไม้");
+        }
+     }
+   return false;
+  }
+
 // ครบไม้ / แพ้ครบ / ถึงเพดานขาดทุนของวันแล้วหรือยัง
 bool DayLimitHit()
   {
+   if(g_halted || g_dayBlocked || FridayClosed() || NearNews())
+      return true;
    int trades, losses;
    double dayPl;
    DayCounters(trades, losses, dayPl);
@@ -784,6 +998,8 @@ bool IsNoTradeDate(const datetime day)
    MqlDateTime s;
    TimeToStruct(day, s);
    if(InpSkipNfpDay && s.day_of_week == 5 && s.day <= 7)
+      return true;
+   if(InpSkipFomc && StringFind(FOMC_DATES, TimeToString(day, TIME_DATE)) >= 0)
       return true;
    return StringFind(InpNoTradeDates, TimeToString(day, TIME_DATE)) >= 0;
   }
@@ -1900,6 +2116,8 @@ void ManageOnTick()
 //+------------------------------------------------------------------+
 void OnTick()
   {
+   if(GuardOnTick())
+      return;
    ManageOnTick();
    datetime bt = iTime(_Symbol, SigTF(), 0);
    if(bt == g_lastBar)
@@ -1932,6 +2150,8 @@ void OnNewBar()
       DeletePending();
       g_waitPA = false;
       g_noTrade = IsNoTradeDate(day);
+      g_dayStartBal = AccountInfoDouble(ACCOUNT_BALANCE);
+      g_dayBlocked = false;
       g_dayOk = ComputeBias() && !g_noTrade;
      }
 
