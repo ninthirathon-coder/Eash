@@ -3,22 +3,30 @@ import json, random, html, collections, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from quiz_data import COURSES, Q
 
+from quiz_data2 import Q2
+
 LET = "กขคง"
-random.seed(11)
-targets = [0] * 13 + [1] * 13 + [2] * 12 + [3] * 12
-random.shuffle(targets)
-assert len(Q) == 50, len(Q)
+DRANK = {"ง่าย": 0, "ปานกลาง": 1, "ยาก": 2}
+def sec(ref):
+    return (9, 9) if ref == "เสริม" else tuple(int(p) for p in (ref.split(".") + ["0"])[:2])
 
+ALL = Q + Q2
 items = []
-for i, (c, ref, diff, q, ok, wrong, exp) in enumerate(Q):
-    t = targets[i]
-    opts = list(wrong)
-    opts.insert(t, ok)
-    items.append(dict(n=i + 1, c=c, ref=ref, diff=diff, q=q, opts=opts, a=t, exp=exp))
-
-print("answer spread:", collections.Counter(LET[x["a"]] for x in items))
-print("per course:", collections.Counter(x["c"] for x in items))
-print("difficulty:", collections.Counter(x["diff"] for x in items))
+random.seed(11)
+for cid, _, _ in COURSES:
+    qs = [q for q in ALL if q[0] == cid]
+    assert len(qs) == 50, (cid, len(qs))
+    qs.sort(key=lambda q: (sec(q[1]), DRANK[q[2]]))
+    targets = [0] * 13 + [1] * 13 + [2] * 12 + [3] * 12
+    random.shuffle(targets)
+    for i, (c, ref, diff, q, ok, wrong, exp) in enumerate(qs):
+        assert len(wrong) == 3 and ok not in wrong, q
+        opts = list(wrong); opts.insert(targets[i], ok)
+        items.append(dict(n=i + 1, c=c, ref=ref, diff=diff, q=q, opts=opts, a=targets[i], exp=exp))
+    print(cid, collections.Counter(LET[x["a"]] for x in items if x["c"] == cid),
+          collections.Counter(x["diff"] for x in items if x["c"] == cid))
+stems = [x["q"] for x in items]
+assert len(set(stems)) == len(stems), "duplicate stem"
 
 here = os.path.dirname(os.path.abspath(__file__))
 courses = [dict(id=a, code=b, name=n) for a, b, n in COURSES]
@@ -30,24 +38,32 @@ page = page.replace("/*DATA*/", "const COURSES=" + json.dumps(courses, ensure_as
 open(os.path.join(here, "quiz.html"), "w", encoding="utf-8").write(page)
 
 # ---------- printable ----------
-e = lambda s: s  # questions already contain intended inline markup (<sub>)
+def sheet(nums, fill=None):
+    cells = []
+    for n in nums:
+        cells.append(f"<td><b>{n}.</b> {fill[n] if fill else '____'}</td>")
+        if n % 10 == 0 and n < max(nums):
+            cells.append("</tr><tr>")
+    return '<table class="grid"><tr>' + "".join(cells) + "</tr></table>"
+
 parts = []
 for cid, code, name in COURSES:
     qs = [x for x in items if x["c"] == cid]
-    parts.append(f'<section class="course"><h2>{code} · {name} <span>({len(qs)} ข้อ)</span></h2>')
+    parts.append(f'<section class="course"><h2>{code} · {name} <span>(50 ข้อ)</span></h2>')
+    parts.append("<h3>กระดาษคำตอบ</h3>" + sheet(range(1, 51)))
+    parts.append('<h3>ข้อสอบ</h3>')
     for x in qs:
-        o = "".join(f"<li><b>{LET[k]}.</b> {e(v)}</li>" for k, v in enumerate(x["opts"]))
-        parts.append(f'<div class="q"><p><b>{x["n"]}.</b> {e(x["q"])}</p><ol>{o}</ol></div>')
+        o = "".join(f"<li><b>{LET[k]}.</b> {v}</li>" for k, v in enumerate(x["opts"]))
+        parts.append(f'<div class="q"><p><b>{x["n"]}.</b> {x["q"]}</p><ol>{o}</ol></div>')
     parts.append("</section>")
-key = ['<section class="course"><h2>เฉลยและคำอธิบาย</h2>']
-for cid, code, name in COURSES:
-    key.append(f"<h3>{code} · {name}</h3>")
-    for x in [y for y in items if y["c"] == cid]:
-        key.append(f'<div class="k"><b>{x["n"]}. ตอบ {LET[x["a"]]}</b> <span class="ref">หัวข้อ {x["ref"]} · {x["diff"]}</span><br>{e(x["exp"])}</div>')
-key.append("</section>")
+    parts.append(f'<section class="course"><h2>เฉลย · {code} {name}</h2>')
+    parts.append(sheet(range(1, 51), {x["n"]: LET[x["a"]] for x in qs}))
+    parts.append("<h3>คำอธิบาย</h3>")
+    for x in qs:
+        parts.append(f'<div class="k"><b>{x["n"]}. ตอบ {LET[x["a"]]}</b> <span class="ref">หัวข้อ {x["ref"]} · {x["diff"]}</span><br>{x["exp"]}</div>')
+    parts.append("</section>")
 
-grid = "".join(f"<td><b>{x['n']}</b> {LET[x['a']]}</td>" + ("</tr><tr>" if x["n"] % 10 == 0 and x["n"] < 50 else "") for x in items)
-
+rows = "".join(f"<tr><td>{code}</td><td>{name}</td><td>50</td></tr>" for cid, code, name in COURSES)
 printable = f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ข้อสอบฝึก 4 รายวิชา</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -71,15 +87,10 @@ th {{ background:#e7f5ee; }}
 .grid td {{ text-align:center; }}
 </style></head><body>
 <h1>ข้อสอบฝึก 4 รายวิชา</h1>
-<p>ปรนัย 4 ตัวเลือก รวม 50 ข้อ · อ้างอิงหัวข้อตามเอกสารสอน <i>course-notes.pdf</i></p>
-<table><tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th>จำนวนข้อ</th><th>ข้อที่</th></tr>
-{''.join(f"<tr><td>{code}</td><td>{name}</td><td>{sum(1 for x in items if x['c']==cid)}</td><td>{min(x['n'] for x in items if x['c']==cid)}–{max(x['n'] for x in items if x['c']==cid)}</td></tr>" for cid,code,name in COURSES)}
-</table>
-<div class="intro"><b>วิธีใช้:</b> ทำข้อสอบโดยไม่เปิดเอกสาร จับเวลาประมาณ 75 นาที แล้วตรวจกับเฉลยท้ายเล่ม ข้อที่ผิดให้กลับไปอ่านหัวข้อที่ระบุในเฉลย ข้อคำนวณควรใช้เครื่องคิดเลข</div>
-<h3>กระดาษคำตอบ</h3>
-<table class="grid"><tr>{''.join(f"<td>{n}. ____</td>" + ("</tr><tr>" if n % 10 == 0 and n < 50 else "") for n in range(1,51))}</tr></table>
+<p>ปรนัย 4 ตัวเลือก วิชาละ 50 ข้อ รวม 200 ข้อ · อ้างอิงหัวข้อตามเอกสารสอน <i>course-notes.pdf</i></p>
+<table><tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th>จำนวนข้อ</th></tr>{rows}</table>
+<div class="intro"><b>วิธีใช้:</b> ทำทีละวิชา จับเวลาประมาณ 75 นาทีต่อวิชา โดยไม่เปิดเอกสาร แล้วตรวจกับเฉลยที่อยู่ถัดจากข้อสอบของแต่ละวิชา ข้อที่ผิดให้กลับไปอ่านหัวข้อที่ระบุในเฉลย ข้อคำนวณควรใช้เครื่องคิดเลข<br>
+ข้อที่ระบุหัวข้อ \"เสริม\" เป็นความรู้ด้านระเบียบวิธีวิจัยและการเขียนเชิงวิชาการที่ไม่ได้อยู่ในเอกสารสอน</div>
 {''.join(parts)}
-{''.join(key)}
-<h3>ตารางเฉลยย่อ</h3><table class="grid"><tr>{grid}</tr></table>
 </body></html>"""
 open(os.path.join(here, "quiz-print.html"), "w", encoding="utf-8").write(printable)

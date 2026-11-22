@@ -68,7 +68,7 @@ h2 small { font-family: var(--body); font-weight: 400; color: var(--muted); font
 
 <header class="top wrap">
   <h1>ข้อสอบฝึก 4 รายวิชาการเงิน</h1>
-  <p class="lede">ปรนัย 50 ข้อ เลือกคำตอบแล้วเฉลยจะขึ้นทันที คะแนนแยกตามวิชาจะบอกว่าควรกลับไปทบทวนหัวข้อใดในเอกสารสอน</p>
+  <p class="lede">วิชาละ 50 ข้อ รวม 200 ข้อ เลือกคำตอบแล้วเฉลยจะขึ้นทันที คะแนนแยกตามวิชาจะบอกว่าควรกลับไปทบทวนหัวข้อใดในเอกสารสอน</p>
 </header>
 
 <div class="strip"><div class="wrap" id="chips" role="toolbar" aria-label="เลือกวิชา"></div></div>
@@ -82,7 +82,7 @@ h2 small { font-family: var(--body); font-weight: 400; color: var(--muted); font
 <script>
 /*DATA*/
 const LET = "กขคง";
-const KEY = "fin4-quiz-v1";
+const KEY = "fin4-quiz-v2";
 let answers = {};
 try { answers = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { answers = {}; }
 let filter = "all";
@@ -106,9 +106,9 @@ function renderScores() {
   let right = 0, done = 0;
   COURSES.forEach(c => {
     const qs = ITEMS.filter(x => x.c === c.id);
-    const d = qs.filter(x => x.n in answers), r = d.filter(x => answers[x.n] === x.a);
+    const d = qs.filter(x => (x.c + x.n) in answers), r = d.filter(x => answers[x.c + x.n] === x.a);
     right += r.length; done += d.length;
-    const miss = [...new Set(d.filter(x => answers[x.n] !== x.a).map(x => x.ref))];
+    const miss = [...new Set(d.filter(x => answers[x.c + x.n] !== x.a).map(x => x.ref))];
     const card = el("div", "score");
     card.innerHTML = `<div class="code">${c.code}</div><div class="name">${c.name}</div>
       <div class="num">${r.length} / ${qs.length}</div>
@@ -121,11 +121,11 @@ function renderScores() {
 }
 
 function renderQ(x) {
-  const card = el("article", "q"); card.id = "q" + x.n;
+  const card = el("article", "q"); card.id = "q-" + x.c + x.n; const K = x.c + x.n;
   card.appendChild(el("div", "meta", `<span>ข้อ ${x.n}</span><span>หัวข้อ ${x.ref}</span><span class="d">${x.diff}</span>`));
   card.appendChild(el("p", "stem", x.q));
   const opts = el("div", "opts");
-  const picked = answers[x.n];
+  const picked = answers[K];
   x.opts.forEach((o, k) => {
     const b = el("button", "opt", `<b>${LET[k]}.</b><span>${o}</span>`);
     b.type = "button";
@@ -134,7 +134,7 @@ function renderQ(x) {
       if (k === x.a) b.classList.add("right");
       else if (k === picked) b.classList.add("wrong");
     }
-    b.onclick = () => { answers[x.n] = k; save(); card.replaceWith(renderQ(x)); renderScores(); };
+    b.onclick = () => { answers[K] = k; save(); card.replaceWith(renderQ(x)); renderScores(); };
     opts.appendChild(b);
   });
   card.appendChild(opts);
