@@ -1,4 +1,4 @@
-<#
+﻿<#
   รัน Strategy Tester ของ MT5 เทียบ EA หลายรุ่นอัตโนมัติ แล้วสรุปผลเป็นตาราง
 
   วิธีใช้ (PowerShell):
@@ -33,8 +33,12 @@ $Editor  = Join-Path (Split-Path -Parent $Terminal) "metaeditor64.exe"
 foreach ($p in @($Terminal, $Editor, $Experts)) {
     if (-not (Test-Path $p)) { throw "ไม่พบ $p - ตรวจ -Terminal และ -DataDir" }
 }
-if (Get-Process terminal64 -ErrorAction SilentlyContinue) {
-    throw "MT5 ยังเปิดอยู่ ปิดโปรแกรม MT5 ก่อนแล้วรันใหม่"
+# เช็กเฉพาะ MT5 ตัวที่จะใช้ทดสอบ (เครื่องอาจมี MT5 ของโบรกเกอร์อื่นเปิดอยู่ ซึ่งไม่เกี่ยว)
+$TerminalFull = (Resolve-Path $Terminal).Path
+$running = Get-Process terminal64, metaeditor64 -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and ((Split-Path -Parent $_.Path) -eq (Split-Path -Parent $TerminalFull)) }
+if ($running) {
+    throw "MT5/MetaEditor ตัวนี้ยังเปิดอยู่ (PID $($running.Id -join ', ')) ปิดก่อนแล้วรันใหม่"
 }
 New-Item -ItemType Directory -Force -Path $Sets, $Reports | Out-Null
 
@@ -72,8 +76,13 @@ foreach ($r in $runs) {
     foreach ($k in $r.Inputs.Keys) { $setLines += "$k=$($r.Inputs[$k])" }
     $setLines | Out-File -FilePath (Join-Path $Sets $setName) -Encoding Unicode
 
-    $report = Join-Path $Reports $r.Name
-    Remove-Item "$report.htm*" -ErrorAction SilentlyContinue
+    # MT5 เขียนรายงานได้เฉพาะ path ที่อยู่ใต้โฟลเดอร์ข้อมูลของตัวเอง (path นอกนั้นจะไม่เขียนและไม่แจ้ง error)
+    # จึงให้เขียนไว้ที่ <DataDir>\tester_reports แล้วค่อยคัดลอกมาที่ results\mt5_reports
+    $mtReportRel = "tester_reports\$($r.Name)"
+    $mtReport    = Join-Path $DataDir $mtReportRel
+    $report      = Join-Path $Reports $r.Name
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $mtReport) | Out-Null
+    Remove-Item "$report.htm*", "$mtReport.htm*" -ErrorAction SilentlyContinue
     $ini = Join-Path $Reports "$($r.Name).ini"
     @(
         "[Tester]",
@@ -89,7 +98,7 @@ foreach ($r in $runs) {
         "Leverage=$Leverage",
         "Optimization=0",
         "Visual=0",
-        "Report=$report",
+        "Report=$mtReportRel",
         "ReplaceReport=1",
         "ShutdownTerminal=1"
     ) | Out-File -FilePath $ini -Encoding ASCII
@@ -100,6 +109,7 @@ foreach ($r in $runs) {
     Write-Host ("  เสร็จใน {0:N0} นาที" -f ((Get-Date) - $t0).TotalMinutes)
 
     # ---------- 3) อ่านผลจากรายงาน ----------
+    Get-ChildItem "$mtReport*" -ErrorAction SilentlyContinue | Copy-Item -Destination $Reports -Force
     $file = Get-ChildItem "$report.htm*" -ErrorAction SilentlyContinue | Select-Object -First 1
     $row = [ordered]@{ Run = $r.Name; NetProfit = ""; PF = ""; Trades = ""; BalanceDD = ""; EquityDD = "" }
     if ($file) {
