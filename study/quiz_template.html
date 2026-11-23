@@ -63,6 +63,9 @@ h2 small { font-family: var(--body); font-weight: 400; color: var(--muted); font
 .foot { display: flex; justify-content: flex-end; padding-block: 12px 40px; }
 .btn { font: 600 0.95rem var(--body); background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 16px; cursor: pointer; }
 .btn:hover { border-color: var(--accent); }
+.frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; margin: 2px 3px; }
+.frac > span { line-height: 1.3; padding: 0 3px; }
+.frac > span:first-child { border-bottom: 1px solid currentColor; }
 @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
 </style>
 

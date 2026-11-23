@@ -3,6 +3,16 @@ import os, re, json, random, collections, sys
 here = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, here)
 from bank_chapters import CH
 
+NUMFRAC = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*/\s*(\d[\d,]*(?:\.\d+)?)")
+MARK = re.compile(r"\[\[(.+?)\|\|(.+?)\]\]")
+def frac(s):
+    """Render [[num||den]] markers and plain number/number as stacked fractions."""
+    s = NUMFRAC.sub(r"[[\1||\2]]", s)
+    return MARK.sub(r'<span class="frac"><span>\1</span><span>\2</span></span>', s)
+for ch in CH:
+    ch["html"] = frac(ch["html"])
+    ch["questions"] = [(r, d, frac(q), frac(ok), [frac(w) for w in ws], frac(e)) for r, d, q, ok, ws, e in ch["questions"]]
+
 LET = "กขคง"; DR = {"ง่าย": 0, "ปานกลาง": 1, "ยาก": 2}
 random.seed(3)
 items = []
@@ -24,7 +34,11 @@ css += """
 .q { break-inside: avoid; margin: 0 0 10px; } .q p { margin: 0 0 2px; }
 .q ol { list-style: none; margin: 0; padding-left: 22px; } .q li { margin: 1px 0; }
 .k { break-inside: avoid; margin: 0 0 8px; font-size: 10.5pt; } .ref { color: #5b6660; font-size: 9.5pt; }
-.grid td { text-align: center; } h2 span { font-weight: 400; font-size: 11pt; }
+.grid td { text-align: center; }
+.frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; margin: 2px 3px; }
+.frac > span { line-height: 1.3; padding: 0 3px; white-space: nowrap; }
+.frac > span:first-child { border-bottom: 1px solid currentColor; }
+td:has(.frac) { white-space: nowrap; } h2 span { font-weight: 400; font-size: 11pt; }
 """
 def sheet(qs, fill=False):
     cells = []
