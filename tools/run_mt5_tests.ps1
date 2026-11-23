@@ -21,7 +21,8 @@ param(
     [int]$Deposit     = 10000,
     [string]$Leverage = "1:500",
     [int]$Model       = 4,
-    [string[]]$Only   = @()   # เลือกรันเฉพาะบางรอบ เช่น -Only E,F (ว่าง = ทุกรอบ)
+    [string[]]$Only   = @(),  # เลือกรันเฉพาะบางรอบ เช่น -Only E,F (ว่าง = ทุกรอบ)
+    [string]$Suffix   = ""    # ต่อท้ายชื่อรอบ เช่น -Suffix _5y เพื่อไม่ทับรายงานเดิม
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,10 +69,13 @@ $runs = @(
     @{ Name = "C_v121_no_fomc";       EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpSkipFomc = "false" } },
     @{ Name = "D_v121_risk05";        EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpRiskPct = "0.5" } },
     @{ Name = "E_v122_no_fomc";       EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpSkipFomc = "false" } },
-    @{ Name = "F_v122_no_fomc_part1R"; EA = "ICT_Wyckoff_Gold_EA";     Inputs = @{ InpSkipFomc = "false"; InpObPartialR = "1.0" } }
+    @{ Name = "F_v122_no_fomc_part1R"; EA = "ICT_Wyckoff_Gold_EA";     Inputs = @{ InpSkipFomc = "false"; InpObPartialR = "1.0" } },
+    @{ Name = "G_v122_no_fomc_nostop"; EA = "ICT_Wyckoff_Gold_EA";     Inputs = @{ InpSkipFomc = "false"; InpTotalDDPct = "0" } },
+    @{ Name = "H_v122_no_fomc_part1R_nostop"; EA = "ICT_Wyckoff_Gold_EA"; Inputs = @{ InpSkipFomc = "false"; InpObPartialR = "1.0"; InpTotalDDPct = "0" } }
 )
 $Only = @($Only | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })   # -File ส่ง "E,F" มาเป็นสตริงเดียว
 if ($Only.Count) { $runs = @($runs | Where-Object { $Only -contains $_.Name.Substring(0, 1) }) }
+foreach ($r in $runs) { $r.Name += $Suffix }
 
 $rows = @()
 foreach ($r in $runs) {
