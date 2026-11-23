@@ -20,7 +20,8 @@ param(
     [string]$To       = "2026.11.22",
     [int]$Deposit     = 10000,
     [string]$Leverage = "1:500",
-    [int]$Model       = 4
+    [int]$Model       = 4,
+    [string[]]$Only   = @()   # เลือกรันเฉพาะบางรอบ เช่น -Only E,F (ว่าง = ทุกรอบ)
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,8 +66,12 @@ $runs = @(
     @{ Name = "A_v111_Profit";        EA = "ICT_Wyckoff_Gold_EA_v111"; Inputs = @{} },
     @{ Name = "B_v121_default";       EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{} },
     @{ Name = "C_v121_no_fomc";       EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpSkipFomc = "false" } },
-    @{ Name = "D_v121_risk05";        EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpRiskPct = "0.5" } }
+    @{ Name = "D_v121_risk05";        EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpRiskPct = "0.5" } },
+    @{ Name = "E_v122_no_fomc";       EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpSkipFomc = "false" } },
+    @{ Name = "F_v122_no_fomc_part1R"; EA = "ICT_Wyckoff_Gold_EA";     Inputs = @{ InpSkipFomc = "false"; InpObPartialR = "1.0" } }
 )
+$Only = @($Only | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })   # -File ส่ง "E,F" มาเป็นสตริงเดียว
+if ($Only.Count) { $runs = @($runs | Where-Object { $Only -contains $_.Name.Substring(0, 1) }) }
 
 $rows = @()
 foreach ($r in $runs) {
@@ -130,5 +135,9 @@ foreach ($r in $runs) {
 }
 
 $rows | Format-Table -AutoSize
-$rows | Export-Csv (Join-Path $Reports "summary.csv") -NoTypeInformation -Encoding UTF8
+# รวมกับผลรอบอื่นที่มีอยู่แล้วใน summary.csv (รอบชื่อเดียวกันใช้ผลใหม่)
+$csv = Join-Path $Reports "summary.csv"
+$all = @()
+if (Test-Path $csv) { $all = @(Import-Csv $csv | Where-Object { $rows.Run -notcontains $_.Run }) }
+@($all) + @($rows) | Sort-Object Run | Export-Csv $csv -NoTypeInformation -Encoding UTF8
 Write-Host "รายงานทั้งหมดอยู่ที่ $Reports"

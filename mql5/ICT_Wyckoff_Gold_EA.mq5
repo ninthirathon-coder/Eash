@@ -18,7 +18,7 @@
 //|  ที่แปะ EA (แนะนำ M5 ตามเอกสาร หรือ M1/M3 ถ้าต้องการ SL สั้น)         |
 //|  ฝั่ง Sell ใช้ราคากลับเครื่องหมาย (p' = -p) จึงเขียนโค้ดฝั่ง Buy ชุดเดียว |
 //+------------------------------------------------------------------+
-#property version   "1.21"
+#property version   "1.22"
 #property description "Order Block H1 + ยืนยัน 2 ขั้น (ค่าเริ่มต้น) / ICT 2022 Model + Wyckoff (XAUUSD). ไม่ใช่คำแนะนำการลงทุน"
 
 #include <Trade/Trade.mqh>
@@ -91,6 +91,8 @@ input int    InpHzBars        = 3;      // TP: hidden zone = ไส้ซ้อ�
 input int    InpHzLookback    = 300;    // TP: ย้อนหา hidden zone กี่แท่ง
 input double InpObMinRR       = 2.0;    // TP: RR ขั้นต่ำถึง hidden zone
 input double InpObRR          = 3.0;    // TP: ถ้าไม่มี hidden zone ใช้ RR คงที่ (0 = ไม่เข้า)
+input double InpObPartialR    = 0.0;    // แบ่งปิด: เมื่อกำไรถึงกี่ R ปิดบางส่วน, SL เดิม (0 = ปิด)
+input double InpObPartialPct  = 50.0;   // แบ่งปิด: ปิดกี่ % ของ lot
 input bool   InpObHoldOvernight = true; // ถือข้ามวัน (ไม่ปิดตาม InpEodExit)
 input int    InpObMaxTradesDay = 5;     // จำนวนไม้สูงสุดต่อวัน
 input int    InpObMaxLossesDay = 3;     // แพ้ครบกี่ไม้แล้วหยุดวันนั้น
@@ -290,6 +292,8 @@ int      g_kzEnd   = 0;
 int      g_dir     = 0;
 double   g_tp1     = 0;       // ราคา'
 double   g_tp2     = 0;       // ราคา'
+double   g_pLvl    = 0;       // ราคา' ที่จะแบ่งปิด (0 = ไม่ใช้)
+bool     g_pDone   = false;   // แบ่งปิดไปแล้ว
 double   g_fvgLo   = 0;       // ราคา'
 int      g_expire  = 0;
 bool     g_be      = false;
@@ -1645,6 +1649,8 @@ bool PlaceOrder(const int d, const double ent, const double sl, const double tp1
    g_expire   = expire;
    g_cancelAt = cancelAt;
    g_be       = false;
+   g_pLvl     = 0;
+   g_pDone    = false;
    return true;
   }
 
@@ -2039,6 +2045,8 @@ void ObProcess(const int i, const int mod, const int endm)
         }
       if(PlaceOrder(d, ent, sl, tp, tp, sl, NyMod(InpObEnd) + InpObPendingMin, tp, TAG_OB))
         {
+         if(InpObPartialR > 0 && ent + InpObPartialR * risk < tp)
+            g_pLvl = ent + InpObPartialR * risk;
          int u = ArraySize(g_obUsed);
          ArrayResize(g_obUsed, u + 1);
          g_obUsed[u] = g_os[si].zlo;
@@ -2093,6 +2101,17 @@ void ManageOnTick()
       else if(px >= g_cancelAt)
          DeletePending();                        // ราคาไปถึงเป้าก่อนย่อมาเข้า
       return;
+     }
+   if(g_pLvl > 0 && !g_pDone && px >= g_pLvl)
+     {
+      g_pDone = true;                            // แบ่งปิดตาม InpObPartialR โดยไม่ขยับ SL
+      if(PositionSelectByTicket(pos))
+        {
+         double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+         double part = MathFloor(PositionGetDouble(POSITION_VOLUME) * InpObPartialPct / 100.0 / step + 1e-9) * step;
+         if(part >= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN) && part < PositionGetDouble(POSITION_VOLUME))
+            trade.PositionClosePartial(pos, part);
+        }
      }
    if(g_be || px < g_tp1)
       return;
