@@ -71,7 +71,10 @@ $runs = @(
     @{ Name = "E_v122_no_fomc";       EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpSkipFomc = "false" } },
     @{ Name = "F_v122_no_fomc_part1R"; EA = "ICT_Wyckoff_Gold_EA";     Inputs = @{ InpSkipFomc = "false"; InpObPartialR = "1.0" } },
     @{ Name = "G_v122_no_fomc_nostop"; EA = "ICT_Wyckoff_Gold_EA";     Inputs = @{ InpSkipFomc = "false"; InpTotalDDPct = "0" } },
-    @{ Name = "H_v122_no_fomc_part1R_nostop"; EA = "ICT_Wyckoff_Gold_EA"; Inputs = @{ InpSkipFomc = "false"; InpObPartialR = "1.0"; InpTotalDDPct = "0" } }
+    @{ Name = "H_v122_no_fomc_part1R_nostop"; EA = "ICT_Wyckoff_Gold_EA"; Inputs = @{ InpSkipFomc = "false"; InpObPartialR = "1.0"; InpTotalDDPct = "0" } },
+    # พอร์ตเล็ก (รันด้วย -Deposit ต่ำ): lot ต่ำกว่าขั้นต่ำให้เข้า lot ขั้นต่ำ
+    @{ Name = "I_v123_minlot";        EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpSkipFomc = "false"; InpMinLotFallback = "true" } },
+    @{ Name = "J_v123_minlot_nostop"; EA = "ICT_Wyckoff_Gold_EA";      Inputs = @{ InpSkipFomc = "false"; InpMinLotFallback = "true"; InpTotalDDPct = "0"; InpDailyDDPct = "0" } }
 )
 $Only = @($Only | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })   # -File ส่ง "E,F" มาเป็นสตริงเดียว
 if ($Only.Count) { $runs = @($runs | Where-Object { $Only -contains $_.Name.Substring(0, 1) }) }

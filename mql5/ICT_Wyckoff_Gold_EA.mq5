@@ -18,7 +18,7 @@
 //|  ที่แปะ EA (แนะนำ M5 ตามเอกสาร หรือ M1/M3 ถ้าต้องการ SL สั้น)         |
 //|  ฝั่ง Sell ใช้ราคากลับเครื่องหมาย (p' = -p) จึงเขียนโค้ดฝั่ง Buy ชุดเดียว |
 //+------------------------------------------------------------------+
-#property version   "1.22"
+#property version   "1.23"
 #property description "Order Block H1 + ยืนยัน 2 ขั้น (ค่าเริ่มต้น) / ICT 2022 Model + Wyckoff (XAUUSD). ไม่ใช่คำแนะนำการลงทุน"
 
 #include <Trade/Trade.mqh>
@@ -207,6 +207,8 @@ input bool   InpShowPanel     = false;  // แสดงแผงสถานะ
 
 input group "=== ความเสี่ยง ==="
 input double InpRiskPct       = 1.0;    // ความเสี่ยงต่อไม้ (% ของ equity)
+input bool   InpMinLotFallback = false; // พอร์ตเล็ก: lot ที่คำนวณได้ต่ำกว่าขั้นต่ำ ให้เข้า lot ขั้นต่ำแทนการข้าม (เสี่ยงเกิน % ที่ตั้ง)
+input double InpMinLotMaxRiskPct = 0.0; // พอร์ตเล็ก: ถ้าเข้า lot ขั้นต่ำแล้วเสี่ยงเกิน % นี้ของ equity ให้ข้าม (0 = ไม่จำกัด)
 input int    InpMaxTradesDay  = 2;      // จำนวนไม้สูงสุดต่อวัน
 input int    InpMaxLossesDay  = 2;      // แพ้ครบกี่ไม้แล้วหยุดวันนั้น
 input long   InpMagic         = 20261111;
@@ -1374,8 +1376,16 @@ double CalcLot(const ENUM_ORDER_TYPE type, const double entry, const double sl)
    double riskMoney = AccountInfoDouble(ACCOUNT_EQUITY) * riskPct / 100.0;
    double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
    double lot  = MathFloor(riskMoney / (-loss) / step + 1e-9) * step;
-   if(lot < SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN))
-      return 0;                                  // SL กว้างเกินทุน -> ข้าม setup
+   double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+   if(lot < minLot)
+     {
+      if(!InpMinLotFallback)
+         return 0;                               // SL กว้างเกินทุน -> ข้าม setup
+      // พอร์ตเล็ก: เข้า lot ขั้นต่ำ เมื่อทุนโตจนคำนวณได้ถึงขั้นต่ำ จะกลับไปใช้ % ความเสี่ยงปกติเอง
+      if(InpMinLotMaxRiskPct > 0 && minLot * (-loss) > AccountInfoDouble(ACCOUNT_EQUITY) * InpMinLotMaxRiskPct / 100.0)
+         return 0;
+      return minLot;
+     }
    return MathMin(lot, SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX));
   }
 
