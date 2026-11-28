@@ -1,0 +1,704 @@
+<title>บ้านกลลวง</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a game hall — the stage (current game) on the left, the contestant roster rail on the right; stacks on phones.
+   Deliberately single dark theme: a night-time casino hall of indigo felt and brass. */
+:root{
+  --ink:#0e0f1d; --felt:#151730; --panel:#1b1d3a; --panel-2:#23264a; --line:#33365e;
+  --fg:#ede8da; --mute:#a19dbd; --brass:#d8ad55; --brass-dim:#8f7236;
+  --blood:#e45a6e; --jade:#5cc8a2;
+  --f-display:"Chakra Petch","IBM Plex Sans Thai",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Thai",system-ui,sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{
+  background:var(--ink); color:var(--fg); font-family:var(--f-body); font-size:15px; line-height:1.6;
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:20px 48px;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -8%, color-mix(in srgb, var(--brass) 16%, transparent), transparent 70%),
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--fg) 2%, transparent) 0 2px, transparent 2px 9px);
+}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+
+.top{max-width:1140px;margin:0 auto 18px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.02em;display:flex;align-items:center;gap:10px}
+.brand .seal{width:30px;height:30px;border:1.5px solid var(--brass);border-radius:50%;display:grid;place-items:center;color:var(--brass);font-size:14px}
+.pips{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--mute)}
+.pip{width:26px;height:6px;border-radius:3px;background:var(--line)}
+.pip.done{background:var(--brass-dim)} .pip.now{background:var(--brass)}
+.pip.final{width:40px}
+
+.wrap{max-width:1140px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:20px;align-items:start}
+@media (max-width:880px){.wrap{grid-template-columns:minmax(0,1fr)}}
+
+.stage{background:linear-gradient(180deg,var(--felt),var(--panel));border:1px solid var(--line);border-radius:14px;padding:28px clamp(18px,4vw,36px);min-width:0}
+.eyebrow{font-family:var(--f-display);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--brass)}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:clamp(38px,7vw,64px);font-weight:700}
+h2{font-size:clamp(26px,4vw,34px);font-weight:700}
+h3{font-size:17px;font-weight:600}
+p{margin:0;max-width:65ch}
+.stack{display:flex;flex-direction:column;gap:18px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.lead{color:var(--mute);font-size:16px}
+
+.rules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rules li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px}
+.rules li::before{content:"◆";color:var(--brass);font-size:11px;line-height:2.1}
+.tip{border-left:2px solid var(--brass-dim);padding:6px 0 6px 14px;color:var(--mute);font-size:14px}
+
+.btn{border:1px solid var(--brass);background:var(--brass);color:#1a1405;font-family:var(--f-display);font-weight:700;font-size:16px;padding:11px 24px;border-radius:8px;transition:transform .12s, filter .12s}
+.btn:hover{filter:brightness(1.08)} .btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.4;cursor:not-allowed;filter:none}
+.btn.ghost{background:transparent;color:var(--brass)}
+.btn.red{background:var(--blood);border-color:var(--blood);color:#1d0509}
+.btn.green{background:var(--jade);border-color:var(--jade);color:#04170f}
+
+.cast{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.castcard{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.castcard p{font-size:13px;color:var(--mute)}
+.who{display:flex;align-items:center;gap:10px;min-width:0}
+.ava{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:15px;color:#14121c;background:var(--c,var(--fg))}
+.who b{font-weight:600;display:block;line-height:1.2}
+.who small{color:var(--mute);font-size:12px;display:block;line-height:1.3}
+
+/* roster */
+.rail{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.rail h3{display:flex;justify-content:space-between;align-items:baseline}
+.rail h3 span{font-family:var(--f-body);font-size:12px;color:var(--mute);font-weight:400}
+.roster{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.roster li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--panel-2);border:1px solid transparent}
+.roster li.you{border-color:var(--brass-dim)}
+.roster li.danger{border-color:color-mix(in srgb,var(--blood) 60%,transparent)}
+.roster li.out{opacity:.42;background:transparent}
+.coins{font-family:var(--f-num);font-weight:700;font-size:17px;color:var(--brass);display:flex;align-items:center;gap:5px}
+.coins::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--brass);box-shadow:inset 0 0 0 2px var(--brass-dim)}
+.out .coins{color:var(--mute)} .out .coins::before{background:var(--mute);box-shadow:none}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}
+.tag{font-size:11px;padding:0 7px;border-radius:99px;border:1px solid var(--line);color:var(--mute);line-height:18px}
+.tag.steal{border-color:color-mix(in srgb,var(--blood) 55%,transparent);color:var(--blood)}
+.tag.risk{background:var(--blood);border-color:var(--blood);color:#1d0509}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mute)}
+.log b{color:var(--fg);font-weight:500}
+
+/* inputs */
+.bignum{font-family:var(--f-num);font-weight:700;font-size:clamp(56px,10vw,88px);color:var(--brass);line-height:1}
+input[type=range]{width:100%;accent-color:var(--brass)}
+.picks{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;max-width:520px}
+.pickbtn{aspect-ratio:1;border:1px solid var(--line);background:var(--panel-2);border-radius:10px;font-family:var(--f-num);font-weight:700;font-size:clamp(18px,4vw,26px)}
+.pickbtn[aria-pressed=true]{background:var(--brass);color:#1a1405;border-color:var(--brass)}
+.stepper{display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel-2)}
+.stepper button{width:44px;height:48px;border:0;background:transparent;font-size:22px;color:var(--brass)}
+.stepper button:hover{background:var(--line)}
+.stepper span{min-width:56px;text-align:center;font-family:var(--f-num);font-weight:700;font-size:24px}
+
+.opp{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:start;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px}
+.opp .ava{width:52px;height:52px;font-size:22px}
+.bubble{position:relative;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-top:8px;font-size:15px}
+.bubble::before{content:"“";color:var(--brass);font-family:var(--f-display);font-size:26px;line-height:0;vertical-align:-8px;margin-right:4px}
+.intel{font-size:14px;color:var(--mute)}
+.intel b{color:var(--brass);font-family:var(--f-num)}
+.choice2{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:520px}
+.choice2 .btn{padding:18px 10px;font-size:20px}
+.choice2 small{display:block;font-family:var(--f-body);font-weight:500;font-size:12px;opacity:.75}
+
+/* results */
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-weight:500;color:var(--mute);text-align:left;font-size:12px;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);vertical-align:middle}
+td.r,th.r{text-align:right}
+tr.me td{background:color-mix(in srgb,var(--brass) 8%,transparent)}
+tbody tr{animation:rise .45s both}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.d-pos{color:var(--jade)} .d-neg{color:var(--blood)} .d-zero{color:var(--mute)}
+.win{color:var(--brass);font-weight:600}
+.headline{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:15px}
+.headline b{color:var(--brass)}
+
+.elim{text-align:center;align-items:center;padding-block:20px}
+.elim .ava{width:88px;height:88px;font-size:38px;filter:grayscale(.3)}
+.elim h2{color:var(--blood)}
+.stamp{display:inline-block;font-family:var(--f-display);font-weight:700;letter-spacing:.2em;color:var(--blood);border:2px solid var(--blood);padding:4px 14px;border-radius:6px;transform:rotate(-4deg)}
+
+.fronts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.front{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.front .stepper button{width:36px}
+.front .stepper span{min-width:40px}
+@media (max-width:460px){.front .stepper button{width:30px}.front .stepper span{min-width:30px;font-size:20px}}
+.vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center}
+.vs .side{display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center}
+.vs .score{font-family:var(--f-num);font-weight:700;font-size:40px;color:var(--brass)}
+.vs .side .ava{width:56px;height:56px;font-size:24px}
+
+.champion{text-align:center;align-items:center}
+.champion .ava{width:96px;height:96px;font-size:42px;box-shadow:0 0 0 4px var(--ink),0 0 0 6px var(--brass)}
+.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;width:100%;max-width:420px;text-align:left}
+.rank li{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 12px;background:var(--panel-2);border-radius:8px}
+.rank li .pos{font-family:var(--f-num);font-weight:700;color:var(--brass)}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="brand"><span class="seal">◆</span>บ้านกลลวง</div>
+  <div class="pips" id="pips" aria-label="ความคืบหน้า"></div>
+</header>
+<main class="wrap">
+  <section class="stage" id="stage" aria-live="polite"></section>
+  <aside class="rail" id="rail"></aside>
+</main>
+
+<script>
+"use strict";
+const START = 5;
+const ORDER = ["beauty","split","unique","auction","split"];
+const R = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+const shuffle = a => { a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+const PERSONAS = [
+  {id:"calc",     name:"ธาม",   role:"นักคำนวณ",   hue:"#7fb0e3", bio:"คิดทุกอย่างเป็นตัวเลข ไม่โกหก แต่ก็ไม่ใจดีเกินจำเป็น"},
+  {id:"con",      name:"มิลิน", role:"นักต้มตุ๋น",  hue:"#e45a6e", bio:"ยิ้มหวาน สัญญาเก่ง และไม่ค่อยรักษาสัญญา"},
+  {id:"honest",   name:"ภูผา",  role:"คนซื่อ",      hue:"#5cc8a2", bio:"เชื่อในการร่วมมือ แต่ถ้าโดนหักหลังจะจำไปนาน"},
+  {id:"gambler",  name:"ดาริน", role:"นักพนัน",     hue:"#c493e3", bio:"ชอบความเสี่ยง เดาทางยากที่สุดในบ้าน"},
+  {id:"mirror",   name:"โอม",   role:"กระจกเงา",    hue:"#e6cb6e", bio:"ทำกับคุณแบบที่คุณเคยทำกับคนอื่น"},
+  {id:"survivor", name:"กานต์", role:"ผู้รอดชีวิต", hue:"#eb9862", bio:"ใจดีตอนปลอดภัย โหดเมื่อจนตรอก"},
+];
+
+const GAMES = {
+  beauty:{name:"สองในสาม", tag:"เกมเดาใจฝูงชน", rules:[
+    "ทุกคนจ่ายค่าเข้า 1 เหรียญลงกองกลาง และบ้านเติมให้อีก 2 เหรียญ",
+    "ทุกคนเลือกเลข 0–100 แบบลับ",
+    "เลขเป้าหมาย = 2/3 ของค่าเฉลี่ยเลขของทุกคน",
+    "คนที่เลือกใกล้เป้าหมายที่สุดได้กองกลางทั้งหมด ถ้าเสมอให้แบ่งกัน (ปัดเศษลง)"],
+    tip:"ถ้าทุกคนเลือกมั่วๆ ค่าเฉลี่ยจะราว 50 เป้าหมายก็ราว 33 แต่ถ้าทุกคนคิดได้แบบเดียวกับคุณล่ะ"},
+  unique:{name:"เลขเดี่ยวต่ำสุด", tag:"เกมหลบฝูง", rules:[
+    "ทุกคนเลือกเลข 1–7 แบบลับ",
+    "เลขที่น้อยที่สุดที่ไม่ซ้ำกับใครเลย ชนะ +4 เหรียญ",
+    "ใครเลือกเลขชนกับคนอื่น เสีย 1 เหรียญ"],
+    tip:"เลข 1 ดีที่สุด ถ้าไม่มีใครคิดแบบเดียวกับคุณ"},
+  auction:{name:"ประมูลจ่ายหมด", tag:"เกมใจกล้า", rules:[
+    "บ้านตั้งรางวัล 5 เหรียญ",
+    "ทุกคนเสนอราคาลับ ตั้งแต่ 0 จนถึงจำนวนเหรียญที่มี",
+    "คนที่เสนอสูงสุดเพียงคนเดียวได้รางวัล ถ้าราคาสูงสุดเสมอกัน ไม่มีใครได้",
+    "ทุกคนต้องจ่ายราคาที่เสนอ ไม่ว่าจะชนะหรือแพ้"],
+    tip:"เสนอ 0 ปลอดภัยที่สุด แต่ไม่ช่วยให้คุณหนีท้ายตาราง"},
+  split:{name:"แบ่งหรือฮุบ", tag:"เกมความไว้ใจ", rules:[
+    "จับคู่แบบสุ่ม แต่ละคู่มีกองเหรียญ 4 เหรียญ",
+    "แบ่งทั้งคู่: ได้คนละ +2",
+    "ฮุบฝ่ายเดียว: คนฮุบได้ +4 อีกฝ่ายได้ 0",
+    "ฮุบทั้งคู่: เสียคนละ 1",
+    "ถ้าจำนวนคนเป็นเลขคี่ คนที่ไม่มีคู่ได้ +1",
+    "สถิติการฮุบของทุกคนเปิดเผยต่อทุกคนตลอดเกม"],
+    tip:"จ่าย 1 เหรียญเพื่อ “ส่องใจ” ดูแนวโน้มของคู่คุณก่อนตัดสินใจได้"},
+  final:{name:"สามสมรภูมิ", tag:"ดวลรอบชิงชนะเลิศ", rules:[
+    "สองคนสุดท้ายได้กำลังพล 9 นาย บวกโบนัส 1 นายต่อทุก 2 เหรียญที่มี (สูงสุด +5)",
+    "แต่ละยก แบ่งกำลังพลทั้งหมดลง 3 สมรภูมิแบบลับ",
+    "สมรภูมิไหนส่งคนมากกว่า ชนะสมรภูมินั้น ถ้าเท่ากันไม่มีใครได้",
+    "ชนะสมรภูมิมากกว่า = ชนะยก ใครชนะ 2 ยกก่อนเป็นแชมป์",
+    "ถ้าครบ 5 ยกแล้วยังไม่จบ คนที่มีเหรียญมากกว่าชนะ"],
+    tip:"คู่แข่งบางคนจะจำการวางกำลังของคุณในยกก่อนหน้า"},
+};
+
+let S = null;
+
+function newGame(){
+  const you = {id:"you", name:"คุณ", role:"ผู้เล่น", hue:"#ede8da", you:true};
+  S = {
+    phase:"title", day:0, game:null, ctx:null, input:null, result:null, elim:null, final:null,
+    spectate:false, log:[],
+    players:[you, ...PERSONAS].map(p => ({...p, coins:START, alive:true, steals:0, splits:0, betrayedBy:[], rank:null, elimDay:null})),
+  };
+}
+
+const P = id => S.players.find(p => p.id === id);
+const alive = () => S.players.filter(p => p.alive);
+const youAlive = () => P("you").alive;
+function bottomIds(n){
+  const a = alive().sort((x,y) => x.coins - y.coins);
+  if(!a.length) return [];
+  const cut = a[Math.min(n,a.length)-1].coins;
+  return a.filter(p => p.coins <= cut).map(p => p.id);
+}
+
+/* ---------- AI decisions ---------- */
+function aiBeauty(p){
+  switch(p.id){
+    case "honest": return R(38,62);
+    case "gambler": return R(0,100);
+    case "calc": return R(11,20);
+    case "con": return R(19,30);
+    case "mirror": return R(26,38);
+    case "survivor": return R(16,28);
+  }
+  return R(0,100);
+}
+function aiUnique(p){
+  const w = {calc:[2,2,3,3,4], con:[1,1,2], honest:[3,4,5,5,6], gambler:[1,2,3,4,5,6,7], mirror:[2,3,3], survivor:[1,2,2,3]}[p.id];
+  return pick(w);
+}
+function aiAuction(p){
+  const risk = bottomIds(2).includes(p.id);
+  let b;
+  switch(p.id){
+    case "calc": b = p.coins >= 4 ? R(2,3) : R(0,1); break;
+    case "con": b = R(1,3); break;
+    case "honest": b = R(0,1); break;
+    case "gambler": b = R(2,5); break;
+    case "mirror": b = R(1,3); break;
+    case "survivor": b = risk ? R(3,5) : R(0,2); break;
+    default: b = R(0,3);
+  }
+  return Math.max(0, Math.min(p.coins, b));
+}
+function splitProb(p, opp){
+  const risk = bottomIds(2).includes(p.id);
+  const betrayed = p.betrayedBy.includes(opp.id);
+  switch(p.id){
+    case "honest": return betrayed ? 0.4 : 0.92;
+    case "con": return 0.28;
+    case "calc": return opp.steals > 0 ? 0.25 : 0.82;
+    case "gambler": return 0.5;
+    case "mirror": return betrayed ? 0.05 : (opp.steals > 0 ? 0.35 : 0.95);
+    case "survivor": return risk ? 0.25 : 0.78;
+  }
+  return 0.5;
+}
+function splitMessage(p, opp, choice){
+  const betrayed = p.betrayedBy.includes(opp.id);
+  const sweet = ["ฉันแบ่งแน่นอน ไว้ใจฉันได้เลย","เราเป็นพันธมิตรกันนะ อย่าหักหลังกันเลย","สัญญาเลยว่าแบ่ง เอาไปคนละสองสบายๆ"];
+  switch(p.id){
+    case "honest": return choice==="split" ? pick(["ผมจะเลือกแบ่ง สัญญาด้วยเกียรติ","ร่วมมือกันเถอะ ผมแบ่งแน่นอน"])
+                                           : (betrayed ? "คุณเคยฮุบผม รอบนี้ผมไม่ไว้ใจคุณแล้ว" : "ขอโทษล่วงหน้า รอบนี้ผมต้องเอาตัวรอด");
+    case "con": return pick(sweet);
+    case "calc": return choice==="split" ? pick(["แบ่งได้ +2 แน่ๆ ผมเลือกทางที่คาดเดาได้","ประวัติคุณสะอาด ผมจะแบ่ง"])
+                                         : pick(["ประวัติคุณมีการฮุบ ความเสี่ยงสูงเกินไปสำหรับผม","ตัวเลขไม่เข้าข้างการไว้ใจคุณ"]);
+    case "gambler": return pick(["ลองทายดูสิ","หัวหรือก้อย... ฉันเองก็ยังไม่รู้เลย","ชีวิตต้องมีความเสี่ยงบ้างนะ"]);
+    case "mirror": return betrayed ? "คุณเคยฮุบผม จำได้ไหม" : (opp.steals>0 ? "ผมเห็นสถิติคุณแล้วนะ" : "คุณทำกับคนอื่นยังไง ผมก็ทำกับคุณแบบนั้น");
+    case "survivor": return (choice==="steal" && Math.random()<0.5) ? pick(sweet)
+                          : (choice==="steal" ? "ฉันอยู่ท้ายตาราง ขอโทษจริงๆ" : "ฉันปลอดภัยพอ แบ่งกันเถอะ");
+  }
+  return "...";
+}
+function aiBlotto(p, T, oppLast){
+  let a;
+  if(p.id==="calc" && oppLast){
+    const idx = [0,1,2].sort((i,j) => oppLast[i]-oppLast[j]);
+    a=[0,0,0]; let rem=T;
+    for(const i of idx.slice(0,2)){ const n=Math.min(rem, oppLast[i]+1); a[i]=n; rem-=n; }
+    a[idx[2]] += rem;
+  } else if(p.id==="mirror" && oppLast){
+    const s = oppLast.reduce((x,y)=>x+y,0) || 1;
+    a = oppLast.map(v => Math.floor(v*T/s));
+    a[a.indexOf(Math.max(...a))] += T - a.reduce((x,y)=>x+y,0);
+    a = [a[2],a[0],a[1]];
+  } else if(p.id==="gambler"){
+    const x = R(Math.floor(T*0.4), Math.ceil(T*0.6)); a = shuffle([0,x,T-x]);
+  } else if(p.id==="honest"){
+    const b = Math.floor(T/3); a=[b,b,b]; a[R(0,2)] += T-3*b;
+  } else if(p.id==="you"){
+    const b = Math.floor(T/3); a=[b,b,b]; a[R(0,2)] += T-3*b;
+  } else {
+    let x=R(1,T-1), y=R(1,T-1); if(x>y)[x,y]=[y,x];
+    a = [x, y-x, T-y];
+  }
+  return a;
+}
+
+/* ---------- flow ---------- */
+function startDay(){
+  S.day++;
+  S.game = ORDER[S.day-1];
+  S.result = null; S.elim = null;
+  S.ctx = setupGame(S.game);
+  S.input = {value: S.game==="beauty"?33 : S.game==="auction"?0 : null, intel:false};
+  S.phase = "brief";
+}
+function setupGame(g){
+  if(g!=="split") return {};
+  const order = shuffle(alive().map(p=>p.id));
+  const pairs = [];
+  for(let i=0;i+1<order.length;i+=2) pairs.push([order[i],order[i+1]]);
+  const bye = order.length%2 ? order[order.length-1] : null;
+  const ai = {};
+  for(const [a,b] of pairs){
+    for(const [me,op] of [[a,b],[b,a]]){
+      if(me==="you") continue;
+      const prob = splitProb(P(me), P(op));
+      const choice = Math.random()<prob ? "split" : "steal";
+      ai[me] = {choice, prob, msg: splitMessage(P(me), P(op), choice)};
+    }
+  }
+  return {pairs, bye, ai};
+}
+function play(){
+  if(youAlive()) S.phase = "input";
+  else resolve();
+}
+function resolve(){
+  const g = S.game, ps = alive();
+  const delta = {}, choice = {}, note = {};
+  ps.forEach(p => { delta[p.id]=0; note[p.id]=""; });
+  let headline = "", winners = [];
+
+  if(g==="beauty"){
+    ps.forEach(p => choice[p.id] = p.you ? S.input.value : aiBeauty(p));
+    let pot = 2;
+    ps.forEach(p => { if(p.coins>0){ delta[p.id]-=1; pot++; } });
+    const avg = ps.reduce((s,p)=>s+choice[p.id],0)/ps.length, target = avg*2/3;
+    const dist = id => Math.abs(choice[id]-target);
+    const best = Math.min(...ps.map(p=>dist(p.id)));
+    winners = ps.filter(p => Math.abs(dist(p.id)-best) < 1e-9).map(p=>p.id);
+    const share = Math.floor(pot/winners.length);
+    winners.forEach(id => { delta[id]+=share; note[id]="ใกล้สุด"; });
+    headline = `ค่าเฉลี่ย <b class="num">${avg.toFixed(1)}</b> → เป้าหมาย <b class="num">${target.toFixed(1)}</b> · กองกลาง <b class="num">${pot}</b> เหรียญ → ${winners.map(id=>P(id).name).join(", ")}`;
+  }
+  if(g==="unique"){
+    ps.forEach(p => choice[p.id] = p.you ? S.input.value : aiUnique(p));
+    const cnt = {}; ps.forEach(p => cnt[choice[p.id]] = (cnt[choice[p.id]]||0)+1);
+    const uniq = Object.keys(cnt).map(Number).filter(n=>cnt[n]===1).sort((a,b)=>a-b);
+    ps.forEach(p => { if(cnt[choice[p.id]]>1){ delta[p.id]-=1; note[p.id]="ชนกัน"; } });
+    if(uniq.length){
+      const w = ps.find(p => choice[p.id]===uniq[0]); winners=[w.id]; delta[w.id]+=4; note[w.id]="เลขเดี่ยวต่ำสุด";
+      headline = `เลขเดี่ยวที่น้อยที่สุดคือ <b class="num">${uniq[0]}</b> → ${w.name} ได้ +4`;
+    } else headline = "ไม่มีเลขไหนไม่ซ้ำเลย ไม่มีผู้ชนะ";
+  }
+  if(g==="auction"){
+    ps.forEach(p => choice[p.id] = p.you ? Math.min(S.input.value, p.coins) : aiAuction(p));
+    const max = Math.max(...ps.map(p=>choice[p.id]));
+    const top = ps.filter(p=>choice[p.id]===max);
+    ps.forEach(p => delta[p.id] -= choice[p.id]);
+    if(max>0 && top.length===1){ winners=[top[0].id]; delta[top[0].id]+=5; note[top[0].id]="ชนะประมูล";
+      headline = `${top[0].name} เสนอสูงสุด <b class="num">${max}</b> เหรียญ และได้รางวัล 5 เหรียญ`;
+    } else if(max>0){ top.forEach(p=>note[p.id]="เสมอสูงสุด");
+      headline = `ราคาสูงสุด <b class="num">${max}</b> เสมอกัน ${top.length} คน ไม่มีใครได้รางวัล แต่ทุกคนจ่ายตามที่เสนอ`;
+    } else headline = "ไม่มีใครกล้าเสนอเลย รางวัลกลับเข้าบ้าน";
+  }
+  let order = ps.map(p=>p.id);
+  if(g==="split"){
+    const {pairs, bye, ai} = S.ctx;
+    const ch = id => id==="you" ? S.input.value : ai[id].choice;
+    if(S.input.intel){ delta.you -= 1; }
+    order = [];
+    let both=0, betray=0, mutual=0;
+    for(const [a,b] of pairs){
+      const ca=ch(a), cb=ch(b); choice[a]=ca; choice[b]=cb; order.push(a,b);
+      note[a]=`คู่กับ ${P(b).name}`; note[b]=`คู่กับ ${P(a).name}`;
+      if(ca==="split"&&cb==="split"){ delta[a]+=2; delta[b]+=2; both++; }
+      else if(ca==="steal"&&cb==="steal"){ delta[a]-=1; delta[b]-=1; mutual++; }
+      else { const [st,vi] = ca==="steal"?[a,b]:[b,a]; delta[st]+=4; P(vi).betrayedBy.push(st); betray++; winners.push(st); }
+      [[a,ca],[b,cb]].forEach(([id,c]) => c==="steal" ? P(id).steals++ : P(id).splits++);
+    }
+    if(bye){ choice[bye]="bye"; delta[bye]+=1; note[bye]="ไม่มีคู่"; order.push(bye); }
+    headline = `แบ่งกันทั้งคู่ <b class="num">${both}</b> คู่ · หักหลัง <b class="num">${betray}</b> คู่ · ฮุบชนกัน <b class="num">${mutual}</b> คู่`;
+  }
+
+  const rows = order.map(id => {
+    const p = P(id), before = p.coins;
+    p.coins = Math.max(0, p.coins + delta[id]);
+    return {id, choice: choice[id], delta: p.coins-before, coins: p.coins, note: note[id], win: winners.includes(id)};
+  });
+  S.result = {rows, headline};
+  S.phase = "reveal";
+}
+function eliminate(){
+  const a = alive();
+  const min = Math.min(...a.map(p=>p.coins));
+  const low = a.filter(p=>p.coins===min);
+  const out = pick(low);
+  out.rank = a.length; out.alive = false; out.elimDay = S.day;
+  S.elim = {id: out.id, coins: min, tie: low.length>1 ? low.map(p=>p.name) : null};
+  S.log.push({day:S.day, game:GAMES[S.game].name, out:out.name});
+  S.phase = "elim";
+}
+function afterElim(){
+  if(alive().length===2) startFinal(); else startDay();
+}
+function troopsFor(p){ return 9 + Math.min(5, Math.floor(p.coins/2)); }
+function startFinal(){
+  const [a,b] = alive().sort((x,y)=> (y.you?1:0)-(x.you?1:0));
+  S.day = 6; S.game = "final";
+  S.final = {ids:[a.id,b.id], troops:{[a.id]:troopsFor(a),[b.id]:troopsFor(b)}, rounds:[], wins:{[a.id]:0,[b.id]:0}, winner:null};
+  const T = S.final.troops.you;
+  if(T){ const q=Math.floor(T/3); S.input = {alloc:[q,q,T-2*q]}; }
+  S.phase = "final";
+}
+function lastAlloc(id){ const r=S.final.rounds; return r.length ? r[r.length-1].alloc[id] : null; }
+function finalRound(youAlloc){
+  const F = S.final, [a,b] = F.ids;
+  const alloc = {};
+  for(const [me,op] of [[a,b],[b,a]]){
+    alloc[me] = (me==="you" && youAlloc) ? [...youAlloc] : aiBlotto(P(me), F.troops[me], lastAlloc(op));
+  }
+  const fronts = [0,1,2].map(i => alloc[a][i]>alloc[b][i] ? a : alloc[b][i]>alloc[a][i] ? b : null);
+  const fa = fronts.filter(x=>x===a).length, fb = fronts.filter(x=>x===b).length;
+  const w = fa>fb ? a : fb>fa ? b : null;
+  if(w) F.wins[w]++;
+  F.rounds.push({alloc, fronts, winner:w});
+  if(F.wins[a]>=2 || F.wins[b]>=2) F.winner = F.wins[a]>=2 ? a : b;
+  else if(F.rounds.length>=5){
+    const pa=P(a), pb=P(b);
+    F.winner = pa.coins>pb.coins ? a : pb.coins>pa.coins ? b : pick([a,b]);
+    F.tiebreak = true;
+  }
+  if(F.winner){
+    const loser = F.winner===a ? b : a;
+    P(F.winner).rank = 1; P(loser).rank = 2; P(loser).alive = false; P(loser).elimDay = 6;
+    if(F.winner==="you"){ try{ const k="bkl-wins"; localStorage.setItem(k, String((+localStorage.getItem(k)||0)+1)); }catch(e){} }
+  }
+}
+
+/* ---------- render ---------- */
+const ava = (p, cls="") => `<span class="ava ${cls}" style="--c:${p.hue}" aria-hidden="true">${esc([...p.name][0])}</span>`;
+const who = p => `<span class="who">${ava(p)}<span><b>${esc(p.name)}</b><small>${esc(p.role)}</small></span></span>`;
+const fmtD = d => `<span class="num ${d>0?"d-pos":d<0?"d-neg":"d-zero"}">${d>0?"+":""}${d}</span>`;
+const choiceText = c => c==="split" ? "แบ่ง" : c==="steal" ? "ฮุบ" : c==="bye" ? "บาย" : `<span class="num">${c}</span>`;
+
+function renderPips(){
+  const el = document.getElementById("pips");
+  if(S.phase==="title"){ el.innerHTML = `<span>7 คนเข้าบ้าน · รอดได้คนเดียว</span>`; return; }
+  let h = `<span>วัน</span>`;
+  for(let d=1; d<=5; d++) h += `<span class="pip ${d<S.day?"done":d===S.day?"now":""}" title="วันที่ ${d}"></span>`;
+  h += `<span class="pip final ${S.day===6?"now":""}" title="รอบชิง"></span><span>ชิง</span>`;
+  el.innerHTML = h;
+}
+function renderRail(){
+  let danger = S.phase==="title" || S.phase==="end" ? [] : bottomIds(1);
+  if(danger.length >= alive().length) danger = [];
+  const list = [...S.players].sort((a,b) => (b.alive-a.alive) || (a.alive ? b.coins-a.coins : (a.rank-b.rank)));
+  let h = `<h3>ผู้เข้าแข่งขัน <span>${alive().length} คนยังอยู่</span></h3><ul class="roster">`;
+  for(const p of list){
+    const cls = [p.you?"you":"", !p.alive?"out":"", p.alive && danger.includes(p.id) && S.phase!=="final"?"danger":""].join(" ");
+    let tags = "";
+    if(p.steals) tags += `<span class="tag steal">ฮุบ ${p.steals}</span>`;
+    if(p.splits) tags += `<span class="tag">แบ่ง ${p.splits}</span>`;
+    if(!p.alive && p.elimDay) tags += `<span class="tag">${p.elimDay===6?"รองแชมป์":"ออกวันที่ "+p.elimDay}</span>`;
+    if(p.alive && danger.includes(p.id) && S.phase!=="final") tags += `<span class="tag risk">เสี่ยงถูกคัดออก</span>`;
+    h += `<li class="${cls}"><div>${who(p)}${tags?`<div class="tags">${tags}</div>`:""}</div><span class="coins">${p.coins}</span></li>`;
+  }
+  h += `</ul>`;
+  if(S.log.length){
+    h += `<h3>บันทึกการคัดออก</h3><ul class="log">` + S.log.map(l=>`<li>วันที่ ${l.day} · ${esc(l.game)} — <b>${esc(l.out)}</b></li>`).join("") + `</ul>`;
+  }
+  document.getElementById("rail").innerHTML = h;
+}
+function rulesBlock(g){
+  return `<ul class="rules">${GAMES[g].rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul><p class="tip">${esc(GAMES[g].tip)}</p>`;
+}
+function stageHTML(){
+  const you = P("you");
+  switch(S.phase){
+  case "title": {
+    let wins = 0; try{ wins = +localStorage.getItem("bkl-wins")||0; }catch(e){}
+    return `<div class="stack">
+      <span class="eyebrow">เกมเอาชีวิตรอดด้วยสมอง</span>
+      <h1>บ้านกลลวง</h1>
+      <p class="lead">คุณและผู้เข้าแข่งขันอีก 6 คนถูกขังอยู่ในบ้านหลังเดียวกัน ทุกคนเริ่มด้วย ${START} เหรียญ ทุกวันมีเกมจิตวิทยาหนึ่งเกม จบวันใครเหรียญน้อยที่สุดต้องออกจากบ้าน สองคนสุดท้ายดวลกันเพื่อเป็นแชมป์</p>
+      <ul class="rules">
+        <li>5 วัน 5 เกม: เดาใจฝูงชน, ความไว้ใจ, หลบฝูง, ใจกล้า และความไว้ใจอีกครั้ง</li>
+        <li>เหรียญน้อยสุดถูกคัดออก ถ้าเสมอกันจะจับฉลาก</li>
+        <li>เหรียญที่เหลือในรอบชิงจะกลายเป็นกำลังพลพิเศษ</li>
+        <li>ทุกคนมีนิสัยต่างกัน และทุกคนจำว่าใครเคยหักหลังใคร</li>
+      </ul>
+      <h3>คนในบ้าน</h3>
+      <div class="cast">${PERSONAS.map(p=>`<div class="castcard">${who(p)}<p>${esc(p.bio)}</p></div>`).join("")}</div>
+      <div class="row"><button class="btn" data-act="start">เข้าบ้าน</button>${wins?`<span class="intel">คุณเคยเป็นแชมป์ <b>${wins}</b> ครั้ง</span>`:""}</div>
+    </div>`;
+  }
+  case "brief": {
+    const g = GAMES[S.game];
+    let extra = "";
+    if(S.game==="split" && youAlive()){
+      const pr = S.ctx.pairs.find(x=>x.includes("you"));
+      extra = pr ? `<p class="headline">คู่ของคุณวันนี้คือ <b>${esc(P(pr[0]==="you"?pr[1]:pr[0]).name)}</b></p>` : `<p class="headline">วันนี้คุณ <b>ไม่มีคู่</b> รับ +1 เหรียญฟรี</p>`;
+    }
+    return `<div class="stack">
+      <span class="eyebrow">วันที่ ${S.day} จาก 5 · ${esc(g.tag)}</span>
+      <h2>${esc(g.name)}</h2>
+      ${rulesBlock(S.game)}
+      ${extra}
+      ${S.spectate?`<p class="intel">คุณกำลังดูในฐานะผู้ชม</p>`:""}
+      <div class="row"><button class="btn" data-act="play">${youAlive()?"เริ่มเกม":"ดูผลวันนี้"}</button></div>
+    </div>`;
+  }
+  case "input": return inputHTML(you);
+  case "reveal": {
+    const g = GAMES[S.game], r = S.result;
+    const rows = r.rows.map((x,i)=>{ const p=P(x.id);
+      return `<tr class="${p.you?"me":""}" style="animation-delay:${i*70}ms"><td>${who(p)}</td><td class="${x.win?"win":""}">${choiceText(x.choice)}</td><td>${esc(x.note)}</td><td class="r">${fmtD(x.delta)}</td><td class="r"><span class="num">${x.coins}</span></td></tr>`; }).join("");
+    const intel = S.game==="split" && S.input.intel ? `<p class="intel">หักค่าส่องใจของคุณแล้ว 1 เหรียญ</p>` : "";
+    return `<div class="stack">
+      <span class="eyebrow">ผลวันที่ ${S.day} · ${esc(g.name)}</span>
+      <h2>เปิดไพ่</h2>
+      <p class="headline">${r.headline}</p>${intel}
+      <div class="tablewrap"><table><thead><tr><th>ผู้เล่น</th><th>เลือก</th><th>หมายเหตุ</th><th class="r">ผล</th><th class="r">เหรียญ</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="row"><button class="btn red" data-act="elim">เข้าห้องคัดออก</button></div>
+    </div>`;
+  }
+  case "elim": {
+    const p = P(S.elim.id), isYou = p.you, last = alive().length===2;
+    return `<div class="stack elim">
+      <span class="stamp">คัดออก</span>
+      ${ava(p)}
+      <h2>${isYou?"คุณถูกคัดออก":esc(p.name)+" ต้องออกจากบ้าน"}</h2>
+      <p class="lead">เหลือ <span class="num">${S.elim.coins}</span> เหรียญ ซึ่งน้อยที่สุดในบ้าน${S.elim.tie?` (เสมอกับ ${esc(S.elim.tie.filter(n=>n!==p.name).join(", "))} จึงจับฉลาก)`:""}</p>
+      ${isYou?`<p>คุณจบอันดับที่ <b class="num">${p.rank}</b> จาก 7</p>`:""}
+      <div class="row" style="justify-content:center">
+        ${isYou ? `<button class="btn" data-act="spectate">ดูต่อจนจบ</button><button class="btn ghost" data-act="restart">เริ่มใหม่</button>`
+                : `<button class="btn" data-act="next">${last?"ไปรอบชิงชนะเลิศ":"ไปวันที่ "+(S.day+1)}</button>`}
+      </div>
+    </div>`;
+  }
+  case "final": return finalHTML();
+  case "end": {
+    const champ = S.players.find(p=>p.rank===1);
+    const list = [...S.players].sort((a,b)=>a.rank-b.rank);
+    return `<div class="stack champion">
+      <span class="eyebrow">แชมป์บ้านกลลวง</span>
+      ${ava(champ)}
+      <h2>${champ.you?"คุณคือผู้รอดคนสุดท้าย":esc(champ.name)+" คือแชมป์"}</h2>
+      <p class="lead">${champ.you?"ทุกการตัดสินใจของคุณพามาถึงตรงนี้":"คุณจบอันดับที่ "+P("you").rank+" จาก 7"}</p>
+      <ol class="rank">${list.map(p=>`<li><span class="pos">${p.rank}</span>${who(p)}<span class="coins">${p.coins}</span></li>`).join("")}</ol>
+      <div class="row" style="justify-content:center"><button class="btn" data-act="restart">เล่นอีกครั้ง</button></div>
+    </div>`;
+  }
+  }
+  return "";
+}
+function inputHTML(you){
+  const g = GAMES[S.game], v = S.input.value;
+  let body = "", ok = v!==null && v!==undefined;
+  if(S.game==="beauty"){
+    body = `<div class="stack" style="gap:10px"><span class="bignum" id="bvalue">${v}</span>
+      <label for="beauty-range" class="intel">ลากเพื่อเลือกเลข 0–100</label>
+      <input type="range" id="beauty-range" min="0" max="100" value="${v}" data-act="range"></div>`;
+  }
+  if(S.game==="unique"){
+    body = `<div class="picks" role="group" aria-label="เลือกเลข">${[1,2,3,4,5,6,7].map(n=>`<button class="pickbtn" data-act="pick" data-v="${n}" aria-pressed="${v===n}">${n}</button>`).join("")}</div>`;
+  }
+  if(S.game==="auction"){
+    body = `<div class="row"><span class="stepper"><button data-act="step" data-v="-1" aria-label="ลด">−</button><span>${v}</span><button data-act="step" data-v="1" aria-label="เพิ่ม">+</button></span>
+      <span class="intel">คุณมี <b>${you.coins}</b> เหรียญ · ถ้าชนะได้สุทธิ <b>${5-v>=0?"+":""}${5-v}</b> · ถ้าแพ้เสีย <b>${v}</b></span></div>`;
+  }
+  if(S.game==="split"){
+    const pr = S.ctx.pairs.find(x=>x.includes("you"));
+    if(!pr){
+      return `<div class="stack"><span class="eyebrow">วันที่ ${S.day} · ${esc(g.name)}</span><h2>คุณไม่มีคู่วันนี้</h2>
+        <p class="lead">นั่งดูคนอื่นตัดสินใจ แล้วรับ +1 เหรียญ</p><div class="row"><button class="btn" data-act="submit">ดูผล</button></div></div>`;
+    }
+    const opp = P(pr[0]==="you"?pr[1]:pr[0]), ai = S.ctx.ai[opp.id];
+    const intel = S.input.intel
+      ? `<p class="intel">ส่องใจแล้ว: ${esc(opp.name)} มีแนวโน้มจะ<b>แบ่ง</b>ราว <b>${Math.round(ai.prob*100)}%</b></p>`
+      : `<div class="row"><button class="btn ghost" data-act="intel" ${you.coins<1?"disabled":""}>ส่องใจ (จ่าย 1 เหรียญ)</button><span class="intel">ดูว่าเขามีแนวโน้มจะแบ่งแค่ไหน</span></div>`;
+    return `<div class="stack">
+      <span class="eyebrow">วันที่ ${S.day} · ${esc(g.name)}</span>
+      <h2>ไว้ใจ หรือ หักหลัง</h2>
+      <div class="opp">${ava(opp)}<div><b>${esc(opp.name)}</b> <span class="intel">· ${esc(opp.role)} · ฮุบมาแล้ว ${opp.steals} ครั้ง${opp.betrayedBy.includes("you")?" · เคยโดนคุณฮุบ":""}</span>
+        <div class="bubble">${esc(ai.msg)}</div></div></div>
+      ${intel}
+      <div class="choice2">
+        <button class="btn green" data-act="choose" data-v="split">แบ่ง<small>ทั้งคู่แบ่ง ได้คนละ +2</small></button>
+        <button class="btn red" data-act="choose" data-v="steal">ฮุบ<small>อีกฝ่ายแบ่ง คุณได้ +4</small></button>
+      </div>
+    </div>`;
+  }
+  return `<div class="stack">
+    <span class="eyebrow">วันที่ ${S.day} · ${esc(g.name)}</span>
+    <h2>${S.game==="auction"?"คุณจะเสนอเท่าไหร่":"คุณเลือกเลขอะไร"}</h2>
+    ${body}
+    <div class="row"><button class="btn" data-act="submit" id="submit" ${ok?"":"disabled"}>ยืนยันแบบลับ</button>
+    <span class="intel">เปลี่ยนใจไม่ได้หลังกดยืนยัน</span></div>
+  </div>`;
+}
+function finalHTML(){
+  const F = S.final, [a,b] = F.ids.map(P), you = F.ids.includes("you");
+  const hist = F.rounds.map((r,i)=>`<tr style="animation-delay:${0}ms"><td>ยก ${i+1}</td>
+      ${[0,1,2].map(k=>`<td class="r"><span class="num ${r.fronts[k]===a.id?"win":""}">${r.alloc[a.id][k]}</span> : <span class="num ${r.fronts[k]===b.id?"win":""}">${r.alloc[b.id][k]}</span></td>`).join("")}
+      <td>${r.winner?esc(P(r.winner).name):"เสมอ"}</td></tr>`).join("");
+  const table = F.rounds.length ? `<div class="tablewrap"><table><thead><tr><th>ยก</th><th class="r">สมรภูมิ A</th><th class="r">สมรภูมิ B</th><th class="r">สมรภูมิ C</th><th>ผู้ชนะยก</th></tr></thead><tbody>${hist}</tbody></table></div>` : "";
+  const head = `<span class="eyebrow">รอบชิงชนะเลิศ · ${esc(GAMES.final.tag)}</span><h2>${esc(GAMES.final.name)}</h2>
+    <div class="vs"><div class="side">${ava(a)}<b>${esc(a.name)}</b><span class="intel">กำลังพล <b>${F.troops[a.id]}</b></span></div>
+      <div class="score">${F.wins[a.id]}–${F.wins[b.id]}</div>
+      <div class="side">${ava(b)}<b>${esc(b.name)}</b><span class="intel">กำลังพล <b>${F.troops[b.id]}</b></span></div></div>`;
+  if(F.winner){
+    return `<div class="stack">${head}${table}
+      <p class="headline"><b>${esc(P(F.winner).name)}</b> ชนะการดวล${F.tiebreak?" (ตัดสินด้วยจำนวนเหรียญ)":""}</p>
+      <div class="row"><button class="btn" data-act="toend">พิธีมอบรางวัล</button></div></div>`;
+  }
+  if(!F.rounds.length && !you){
+    return `<div class="stack">${head}${rulesBlock("final")}<div class="row"><button class="btn" data-act="simfinal">ดูการดวล</button></div></div>`;
+  }
+  if(!you){ return `<div class="stack">${head}${table}<div class="row"><button class="btn" data-act="simfinal">ยกต่อไป</button></div></div>`; }
+  const T = F.troops.you, al = S.input.alloc, used = al.reduce((x,y)=>x+y,0), left = T-used;
+  const fronts = ["A","B","C"].map((n,i)=>`<div class="front"><span class="eyebrow">สมรภูมิ ${n}</span>
+     <span class="stepper"><button data-act="alloc" data-i="${i}" data-v="-1" aria-label="ลดสมรภูมิ ${n}">−</button><span>${al[i]}</span><button data-act="alloc" data-i="${i}" data-v="1" aria-label="เพิ่มสมรภูมิ ${n}">+</button></span></div>`).join("");
+  return `<div class="stack">${head}
+    ${F.rounds.length ? table : rulesBlock("final")}
+    <h3>วางกำลังยกที่ ${F.rounds.length+1}</h3>
+    <div class="fronts">${fronts}</div>
+    <div class="row"><button class="btn" data-act="fight" ${left!==0?"disabled":""}>ส่งกำลังพล</button>
+      <span class="intel">${left===0?"วางครบแล้ว":`เหลืออีก <b>${left}</b> นาย`}</span></div>
+  </div>`;
+}
+function render(){
+  renderPips(); renderRail();
+  document.getElementById("stage").innerHTML = stageHTML();
+}
+
+/* ---------- events ---------- */
+function act(a, el){
+  const v = el?.dataset?.v;
+  switch(a){
+    case "start": startDay(); break;
+    case "play": play(); break;
+    case "pick": S.input.value = +v; break;
+    case "step": S.input.value = Math.max(0, Math.min(P("you").coins, S.input.value + (+v))); break;
+    case "intel": if(!S.input.intel && P("you").coins>=1){ S.input.intel = true; } break;
+    case "choose": S.input.value = v; resolve(); break;
+    case "submit": if(S.game==="split" || S.input.value!==null) resolve(); break;
+    case "elim": eliminate(); break;
+    case "next": afterElim(); break;
+    case "spectate": S.spectate = true; afterElim(); break;
+    case "restart": newGame(); break;
+    case "alloc": {
+      const i=+el.dataset.i, T=S.final.troops.you, al=S.input.alloc, used=al.reduce((x,y)=>x+y,0);
+      if(+v>0 && used<T) al[i]++; if(+v<0 && al[i]>0) al[i]--; break;
+    }
+    case "fight": finalRound(S.input.alloc); break;
+    case "simfinal": finalRound(null); break;
+    case "toend": S.phase = "end"; break;
+    default: return;
+  }
+  render();
+  if(["start","play","elim","next","spectate","restart","toend","choose","submit"].includes(a)) document.getElementById("stage").scrollIntoView({block:"start", behavior:"smooth"});
+}
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if(!el || el.disabled || el.dataset.act==="range") return;
+  act(el.dataset.act, el);
+});
+document.addEventListener("input", e => {
+  if(e.target.id==="beauty-range"){
+    S.input.value = +e.target.value;
+    const b = document.getElementById("bvalue"); if(b) b.textContent = S.input.value;
+  }
+});
+
+function start(data){
+  if(data && data.S && data.S.players) S = data.S; else newGame();
+  window.claude?.hot?.snapshot?.(() => ({S}));
+  render();
+}
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
